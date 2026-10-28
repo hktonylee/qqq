@@ -61,7 +61,10 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         assert result.returncode == expected_status, (args, result.returncode)
         return value
 
-    cli("init")
+    if scenario not in ("init_missing", "init_empty_directory"):
+        cli("init")
+    elif scenario == "init_empty_directory":
+        (Path(folder) / ".qqq").mkdir()
     if scenario == "child_open_new":
         cli("config", "tui.after_save_new", "open_new")
     if scenario == "tags_new_open_new":
@@ -70,7 +73,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         cli("config", "tui.after_save_new", "open_saved" if scenario == "after_save_open_saved" else "open_new")
         if scenario == "after_save_default_restored":
             cli("config", "--unset", "tui.after_save_new")
-    if scenario == "workflow_empty":
+    if scenario in ("workflow_empty", "init_missing", "init_empty_directory"):
         pass
     elif scenario == "workflow_status":
         cli("add", "Finished item")
@@ -546,7 +549,7 @@ print(json.dumps({"result": result}))
     if scenario == "views_visibility":
         args.extend(["--view", "Backend"])
     launch_dir = folder
-    if scenario == "create_agent_nested":
+    if scenario in ("create_agent_nested", "init_nested"):
         launch_dir = str(Path(folder) / "child")
         Path(launch_dir).mkdir()
     child = subprocess.Popen(args, cwd=launch_dir, env=env, stdin=slave,
@@ -763,11 +766,26 @@ print(json.dumps({"result": result}))
                              and editor_line().startswith("Second"))
                 settle()
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
-        if not scenario.startswith(("wide_layout", "menu_retry_", "menu_error_", "long_description_", "completed_toggle", "completed_menu", "archived_toggle", "force_complete", "force_reopen", "force_error", "orphan_reopen", "views_startup", "views_visibility", "scroll_multiline")) and scenario not in ("buffers_scroll", "handoff_scroll", "ctrl_c_new_scroll", "live_refresh_scroll", "tree_navigation", "ctrl_punctuation_tree", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden", "jump_archived"):
+        if not scenario.startswith(("wide_layout", "menu_retry_", "menu_error_", "long_description_", "completed_toggle", "completed_menu", "archived_toggle", "force_complete", "force_reopen", "force_error", "orphan_reopen", "views_startup", "views_visibility", "scroll_multiline", "init_")) and scenario not in ("buffers_scroll", "handoff_scroll", "ctrl_c_new_scroll", "live_refresh_scroll", "tree_navigation", "ctrl_punctuation_tree", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden", "jump_archived"):
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
-        if scenario.startswith("create_agent_"):
+        if scenario.startswith("init_"):
+            assert (Path(folder) / ".qqq/qqq.db").is_file()
+            initial = cli("list")
+            assert len(initial) == (2 if scenario == "init_nested" else 0)
+            if scenario == "init_nested":
+                assert not (Path(launch_dir) / ".qqq").exists()
+            send(b"Bootstrapped task")
+            wait_caret(lambda: editor_line().startswith("Bootstrapped task"), (17, editor_row() + 1))
+            send(b"\x13")
+            task_id = len(initial) + 1
+            wait_visible(lambda: visible.text().splitlines()[-1].startswith(f"Saved #{task_id}"))
+            assert cli("show", str(task_id))["task"]["description"] == "Bootstrapped task"
+            assert cli("list")[:len(initial)] == initial
+            if scenario == "init_nested":
+                assert not (Path(launch_dir) / ".qqq").exists()
+        elif scenario.startswith("create_agent_"):
             initial = cli("list", "--all")
             initial_link = cli("show", "2")["herdr"]
             send(b"\x1b[1;2A")

@@ -327,6 +327,29 @@ fn init_is_explicit_and_repeatable() {
 }
 
 #[test]
+fn tui_does_not_replace_invalid_database_or_initialize_for_invalid_selectors() {
+    let dir = TempDir::new().unwrap();
+    for args in [
+        vec!["tui", "--filter", "status =="],
+        vec!["tui", "--tag", ""],
+    ] {
+        assert!(!run(dir.path(), &args).status.success());
+        assert!(!dir.path().join(".qqq").exists());
+    }
+    std::fs::create_dir(dir.path().join(".qqq")).unwrap();
+    let database = dir.path().join(".qqq/qqq.db");
+    std::fs::write(&database, b"invalid database sentinel").unwrap();
+    let output = run(dir.path(), &["tui"]);
+    assert!(!output.status.success());
+    let error: Value = serde_json::from_slice(&output.stderr).unwrap();
+    assert_eq!(error["code"], "DATABASE_ERROR");
+    assert_eq!(
+        std::fs::read(&database).unwrap(),
+        b"invalid database sentinel"
+    );
+}
+
+#[test]
 fn init_creates_hidden_project_database() {
     let d = TempDir::new().unwrap();
     let initialized = ok(d.path(), &["init"]);

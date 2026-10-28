@@ -146,7 +146,7 @@ enum Commands {
     },
     /// Preview metadata changes; explicitly apply exact saved JSON preview.
     Bulk(bulk::Args),
-    /// Browse tasks above a continuous interactive editor.
+    /// Browse tasks and edit descriptions; initialize a missing project database.
     Tui {
         /// Include archived tasks in dashboard browsing.
         #[arg(long)]
@@ -1183,6 +1183,18 @@ fn run(cli: Cli) -> Result<(Option<String>, bool)> {
             },
             selection::Visibility::default(),
         )?;
+    }
+    if matches!(&cli.command, Commands::Tui { .. })
+        && let Err(error) = db::database_path(false)
+    {
+        if error
+            .downcast_ref::<errors::Info>()
+            .is_some_and(|info| matches!(info.code, errors::Code::ProjectNotFound))
+        {
+            db::Db::open(true)?;
+        } else {
+            return Err(error);
+        }
     }
     let mut view_context = None;
     if let Some((selectors, name, visibility)) = inputs

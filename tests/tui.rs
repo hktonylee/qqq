@@ -391,6 +391,13 @@ fn tui_dashboard_ctrl_h_initial_prompt_uses_configuration() {
 }
 
 #[test]
+fn tui_dashboard_initializes_missing_database_and_reuses_parent_project() {
+    for name in ["init_missing", "init_empty_directory", "init_nested"] {
+        dashboard_scenario(name);
+    }
+}
+
+#[test]
 fn tui_dashboard_ctrl_h_opens_linked_new_tasks() {
     for name in ["handoff_new", "handoff_new_filter", "handoff_reopened"] {
         dashboard_scenario(name);

@@ -26,7 +26,9 @@ cargo install --path . --locked --force
 
 Run `qqq init` in a project before adding tasks. Commands find the nearest
 `.qqq/` in the current directory or its parents and use its `qqq.db`.
-A missing database there is an error. `qqq config` needs no project database.
+If no database is found, `qqq tui` initializes a project in the current directory
+before opening the dashboard. Other project commands require an existing database.
+`qqq config` needs no project database.
 
 ## List and show
 
