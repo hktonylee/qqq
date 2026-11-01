@@ -141,6 +141,14 @@ with tempfile.TemporaryDirectory(prefix="qqq-bulk-pty-") as folder:
 
             send(b"\x18")
             contains("Select task IDs")
+            send(b"3\r")
+            contains("Bulk selected: 2")
+            rows = screen.text().splitlines()
+            assert any(row.startswith("+") and "Second" in row for row in rows), screen.text()
+            assert any(row.startswith("+") and "Third" in row for row in rows), screen.text()
+
+            send(b"\x18")
+            contains("Select task IDs")
             send(b"2-3\r")
             contains("Bulk selected: 2")
             rows = screen.text().splitlines()
@@ -149,8 +157,17 @@ with tempfile.TemporaryDirectory(prefix="qqq-bulk-pty-") as folder:
 
             send(b"\x18")
             contains("Select task IDs")
+            send(b"1\r")
+            contains("No visible tasks match")
+            assert "Select task IDs" in screen.text(), screen.text()
+            send(b"\x1b")
+            contains("Bulk range selection cancelled")
+            assert sum(row.startswith("+") for row in screen.text().splitlines()) == 2
+
+            send(b"\x18")
+            contains("Select task IDs")
             send(b"100-\r")
-            contains("No visible tasks match that range")
+            contains("No visible tasks match")
             assert "Select task IDs" in screen.text(), screen.text()
             send(b"\x1b")
             contains("Bulk range selection cancelled")

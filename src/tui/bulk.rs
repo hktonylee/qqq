@@ -326,13 +326,13 @@ impl View {
                                 .filter(|id| (*id >= start) && (*id <= end))
                                 .collect();
                             if ids.is_empty() {
-                                *error = "No visible tasks match that range".to_owned();
+                                *error = "No visible tasks match that ID or range".to_owned();
                             } else {
                                 return Intent::Select(ids);
                             }
                         }
                         None => {
-                            *error = "Enter a range like 1-5, -5, or 100-".to_owned();
+                            *error = "Enter an ID or range like 3, 1-5, -5, or 100-".to_owned();
                         }
                     }
                 } else {
@@ -392,11 +392,11 @@ impl View {
                 .collect();
             if hints.len() > 1 {
                 rows[hints[0]].text = if width >= 26 {
-                    "Range: 1-5, -5, or 100-".to_owned()
+                    "ID/range: 3, 1-5, -5, 100-".to_owned()
                 } else if width >= 16 {
-                    "Range: 1-5, -5".to_owned()
+                    "ID/range: 3, 1-5".to_owned()
                 } else {
-                    "ID range".to_owned()
+                    "ID/range".to_owned()
                 };
             }
             if let Some(index) = hints.last() {

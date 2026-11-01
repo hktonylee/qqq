@@ -526,9 +526,11 @@ work for discard prompts. Bulk add/replace tag inputs use the same completion.
 
 ### Bulk selection
 
-Ctrl-X marks tasks with `+`; marks survive filtering and refresh. Ctrl-G opens
-add/remove/replace tags, priority and archive/unarchive actions for the exact
-marked IDs. `x` clears marks.
+Ctrl-X marks tasks with `+`; marks survive filtering and refresh. From New Task,
+Ctrl-X opens a selector accepting one task ID (`3`), an inclusive range (`1-5`),
+or an open range (`-5`, `100-`). Only visible tasks are added to the selection.
+Ctrl-G opens add/remove/replace tags, priority and archive/unarchive actions for
+the exact marked IDs. `x` clears marks.
 
 Remove-tags offers the sorted union of saved labels on all marked tasks,
 including hidden ones. Up/Down picks; Space toggles; Enter/Ctrl-S previews.
