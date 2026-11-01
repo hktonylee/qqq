@@ -482,7 +482,10 @@ text or manual scroll. Lists and filters use saved descriptions.
 If a saved New task's linked Herdr agent is gone, Ctrl-H shows a warning;
 press Ctrl-H again to open the agent-creation dialog. Esc cancels without
 changing the saved link or draft. For other task statuses, the second press
-opens the linked Herdr workspace instead. Detach from Herdr to return.
+opens the linked Herdr workspace instead. If that workspace ID is gone,
+qqq looks for a workspace on the same Herdr server whose pane has the saved
+working directory, using the queue project directory when the link has none.
+Detach from Herdr to return.
 
 Task previews show up to three wrapped lines; the editor loads the full text.
 Selection follows the full preview when it fits. Manual scrolling can leave it

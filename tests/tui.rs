@@ -487,6 +487,22 @@ fn tui_dashboard_ctrl_h_opens_workspace_after_stale_agent_warning() {
 }
 
 #[test]
+fn tui_dashboard_ctrl_h_finds_replacement_workspace_by_working_directory() {
+    for scenario in [
+        "handoff_stale_workspace_relocated",
+        "handoff_stale_workspace_relocated_default",
+        "handoff_stale_workspace_relocated_project",
+        "handoff_stale_workspace_relocated_symlink",
+        "handoff_stale_workspace_relocated_no_match",
+        "handoff_stale_workspace_relocated_exists",
+        "handoff_stale_workspace_relocated_query_error",
+        "handoff_stale_workspace_relocated_focus_error",
+    ] {
+        dashboard_scenario(scenario);
+    }
+}
+
+#[test]
 fn tui_dashboard_ctrl_h_errors_preserve_editor() {
     for scenario in [
         "handoff_no_selection",

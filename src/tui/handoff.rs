@@ -236,14 +236,65 @@ pub(super) fn focus(db: &crate::db::Db, id: i64) -> Result<Option<String>> {
 }
 
 pub(super) fn focus_workspace(db: &crate::db::Db, id: i64) -> Result<Option<String>> {
+    #[derive(Deserialize)]
+    struct Workspaces {
+        workspaces: Vec<Workspace>,
+    }
+    #[derive(Deserialize)]
+    struct Workspace {
+        workspace_id: String,
+    }
+    #[derive(Deserialize)]
+    struct Panes {
+        panes: Vec<crate::herdr::Pane>,
+    }
     let link = db
         .link(id)?
         .context("Task has no Herdr link; run qqq herdr link")?;
     crate::db::nonempty(&link.pane.workspace_id, "Linked Herdr workspace")?;
-    let _: serde_json::Value = crate::herdr::call(
+    let focused: Result<serde_json::Value> = crate::herdr::call(
         link.server.as_deref(),
         &["workspace", "focus", &link.pane.workspace_id],
-    )?;
+    );
+    if let Err(error) = focused {
+        let workspaces: Workspaces =
+            match crate::herdr::call(link.server.as_deref(), &["workspace", "list"]) {
+                Ok(workspaces) => workspaces,
+                Err(_) => return Err(error),
+            };
+        if workspaces
+            .workspaces
+            .iter()
+            .any(|workspace| workspace.workspace_id == link.pane.workspace_id)
+        {
+            return Err(error);
+        }
+        let panes: Panes = match crate::herdr::call(link.server.as_deref(), &["pane", "list"]) {
+            Ok(panes) => panes,
+            Err(_) => return Err(error),
+        };
+        let cwd = match link.pane.cwd.as_deref() {
+            Some(cwd) if cwd.is_absolute() => cwd.canonicalize().ok(),
+            Some(_) => None,
+            None => project_root(db).ok(),
+        };
+        let Some(pane) = cwd.and_then(|cwd| {
+            panes.panes.iter().find(|pane| {
+                pane.cwd.as_deref().is_some_and(|candidate| {
+                    candidate.is_absolute()
+                        && candidate
+                            .canonicalize()
+                            .is_ok_and(|candidate| candidate == cwd)
+                })
+            })
+        }) else {
+            return Err(error);
+        };
+        let _: serde_json::Value = crate::herdr::call(
+            link.server.as_deref(),
+            &["workspace", "focus", &pane.workspace_id],
+        )?;
+    }
     Ok(link.server)
 }
 

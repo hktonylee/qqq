@@ -341,10 +341,23 @@ print(json.dumps({"result": {"pane": pane}}))
         identity = (live_pane["agent_session"] if scenario != "handoff_terminal"
                     else {"agent": "codex", "kind": "terminal", "value": "live-terminal"})
         cached_pane = dict(live_pane, pane_id="cached:p1")
+        if scenario.startswith("handoff_stale_workspace_relocated"):
+            linked_cwd = Path(folder) / "linked"
+            linked_cwd.mkdir()
+            (Path(folder) / "other").mkdir()
+            env["HANDOFF_CWD"] = str(linked_cwd)
+            if scenario == "handoff_stale_workspace_relocated_project":
+                env["HANDOFF_CWD"] = folder
+            elif scenario == "handoff_stale_workspace_relocated_symlink":
+                alias = Path(folder) / "linked-alias"
+                alias.symlink_to(linked_cwd, target_is_directory=True)
+                cached_pane["cwd"] = str(alias)
+            else:
+                cached_pane["cwd"] = str(linked_cwd)
         if scenario not in ("handoff_missing", "handoff_no_selection"):
             with sqlite3.connect(Path(folder) / ".qqq/qqq.db") as connection:
                 connection.execute("INSERT INTO herdr_links(task_id,link_json) VALUES(?,?)", (
-                    2, json.dumps({"server": None if scenario == "handoff_stale_workspace_default" else "named",
+                    2, json.dumps({"server": None if scenario.endswith("_default") else "named",
                                    "identity": identity, "pane": cached_pane}),
                 ))
         fake = Path(folder) / "herdr"
@@ -355,7 +368,7 @@ args = sys.argv[1:]
 with open("herdr-calls", "a") as log:
     log.write(json.dumps(args) + "\n")
 scenario = os.environ["HANDOFF_SCENARIO"]
-if scenario != "handoff_stale_workspace_default":
+if not scenario.endswith("_default"):
     assert args[:2] == ["--session", "named"], args
     args = args[2:]
 pane = json.loads(os.environ["HANDOFF_PANE"])
@@ -364,8 +377,34 @@ if args == ["agent", "list"]:
               if scenario == "handoff_ambiguous" else [pane])
     result = {"agents": agents}
 elif args == ["workspace", "focus", "live"]:
-    if scenario == "handoff_stale_workspace_error":
+    if scenario == "handoff_stale_workspace_relocated_exists":
+        print("focus denied", file=sys.stderr)
+        sys.exit(1)
+    if scenario == "handoff_stale_workspace_error" or scenario.startswith("handoff_stale_workspace_relocated"):
         print("workspace missing", file=sys.stderr)
+        sys.exit(1)
+    result = {}
+elif args == ["workspace", "list"]:
+    exists = scenario == "handoff_stale_workspace_relocated_exists"
+    workspaces = [{"workspace_id": "live" if exists else "relocated", "active_tab_id": None if exists else "relocated:t1",
+                   "agent_status": "unknown", "focused": False, "label": "Linked", "number": 1,
+                   "pane_count": 0 if exists else 1, "tab_count": 0 if exists else 1}]
+    result = {"type": "workspace_list", "workspaces": workspaces}
+elif args == ["pane", "list"]:
+    if scenario == "handoff_stale_workspace_relocated_query_error":
+        print("cannot list panes", file=sys.stderr)
+        sys.exit(1)
+    panes = []
+    if scenario.startswith("handoff_stale_workspace_relocated"):
+        cwd = os.environ["HANDOFF_CWD"]
+        wrong_cwd = str(Path.cwd() / "other") if scenario.endswith("_project") else str(Path.cwd())
+        panes.append(dict(pane, workspace_id="wrong", cwd=wrong_cwd, foreground_cwd=cwd))
+        if scenario != "handoff_stale_workspace_relocated_no_match":
+            panes.append(dict(pane, pane_id="relocated:p1", tab_id="relocated:t1", workspace_id="relocated", cwd=cwd))
+    result = {"panes": panes}
+elif args == ["workspace", "focus", "relocated"]:
+    if scenario == "handoff_stale_workspace_relocated_focus_error":
+        print("replacement focus denied", file=sys.stderr)
         sys.exit(1)
     result = {}
 elif args == ["agent", "focus", "live:p2"]:
@@ -2941,7 +2980,7 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: editor_line().startswith("Changed Second")
                          and (visible.x, visible.y) == (8, editor_row() + 1))
             cursor = (visible.x, visible.y)
-            prefix = [] if scenario == "handoff_stale_workspace_default" else ["--session", "named"]
+            prefix = [] if scenario.endswith("_default") else ["--session", "named"]
             calls_path = Path(folder) / "herdr-calls"
             opened = Path(folder) / "herdr-client-opened"
             expected_calls = [prefix + ["agent", "list"]]
@@ -2978,8 +3017,18 @@ print(json.dumps({"result": result}))
             clear_capture()
             send(b"\x1b[104;5u")
             expected_calls.append(prefix + ["workspace", "focus", "live"])
-            if scenario == "handoff_stale_workspace_error":
-                wait_visible(lambda: visible.text().splitlines()[-1].startswith("Herdr failed: workspace missing")
+            if scenario == "handoff_stale_workspace_error" or scenario.startswith("handoff_stale_workspace_relocated"):
+                expected_calls.append(prefix + ["workspace", "list"])
+                if not scenario.endswith("_exists"):
+                    expected_calls.append(prefix + ["pane", "list"])
+            relocated = scenario.startswith("handoff_stale_workspace_relocated")
+            failed = scenario == "handoff_stale_workspace_error" or scenario.endswith(("_no_match", "_exists", "_query_error", "_focus_error"))
+            if relocated and not scenario.endswith(("_no_match", "_exists", "_query_error")):
+                expected_calls.append(prefix + ["workspace", "focus", "relocated"])
+            if failed:
+                error = ("replacement focus denied" if scenario.endswith("_focus_error") else
+                         "focus denied" if scenario.endswith("_exists") else "workspace missing")
+                wait_visible(lambda: visible.text().splitlines()[-1].startswith(f"Herdr failed: {error}")
                              and (visible.x, visible.y) == cursor)
                 assert not opened.exists()
             else:
