@@ -476,8 +476,13 @@ text or manual scroll. Lists and filters use saved descriptions.
 | Ctrl-L | Edit task or draft tags |
 | Ctrl-X | Toggle a saved task's bulk-selection mark |
 | Ctrl-G | Open task actions, or bulk actions while tasks are marked |
-| Ctrl-H | Open the linked live Herdr agent; detach to return |
+| Ctrl-H | Open the linked live Herdr agent, or create one for a New task |
 | Ctrl+F or Ctrl+/ | Focus the description filter |
+
+If a saved New task's linked Herdr agent is gone, Ctrl-H shows a warning;
+press Ctrl-H again to open the agent-creation dialog. Esc cancels without
+changing the saved link or draft. For other task statuses, the second press
+opens the linked Herdr workspace instead. Detach from Herdr to return.
 
 Task previews show up to three wrapped lines; the editor loads the full text.
 Selection follows the full preview when it fits. Manual scrolling can leave it

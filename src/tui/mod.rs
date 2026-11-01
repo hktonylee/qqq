@@ -1061,7 +1061,7 @@ fn compose_inner(
     let mut show_completed = completed_limit != Some(0);
     let mut message = String::new();
     let mut message_is_error = false;
-    let mut herdr_workspace_warning: Option<(i64, String)> = None;
+    let mut herdr_agent_warning: Option<(i64, String)> = None;
     let mut confirmation: Option<Confirmation> = None;
     let mut action_ui: Option<ActionUi> = None;
     let mut jump_ui: Option<jump::View> = None;
@@ -1074,16 +1074,12 @@ fn compose_inner(
     let mut saved_any = false;
     let mut buffers = DraftBuffers::default();
     loop {
-        if herdr_workspace_warning
+        if herdr_agent_warning
             .as_ref()
             .is_some_and(|(id, warning)| target_id != Some(*id) || message != *warning)
         {
-            herdr_workspace_warning = None;
+            herdr_agent_warning = None;
         }
-        let message_hint = herdr_workspace_warning
-            .as_ref()
-            .filter(|_| confirmation.is_none())
-            .map(|_| "Press Ctrl-H again to open the Herdr workspace");
         let size = terminal::size()?;
         let filter_visible = dashboard::filter_visible(
             &filter_query,
@@ -1164,7 +1160,20 @@ fn compose_inner(
         let can_create_agent = dashboard
             && target_id.is_some()
             && target_status.as_deref() == Some("new")
-            && !has_herdr_link;
+            && (!has_herdr_link
+                || herdr_agent_warning
+                    .as_ref()
+                    .is_some_and(|(id, _)| target_id == Some(*id)));
+        let message_hint = herdr_agent_warning
+            .as_ref()
+            .filter(|_| confirmation.is_none())
+            .map(|_| {
+                if can_create_agent {
+                    "Press Ctrl-H again to create a Herdr agent"
+                } else {
+                    "Press Ctrl-H again to open the Herdr workspace"
+                }
+            });
         let has_herdr_action = has_herdr_link || can_create_agent;
         let buffer_footer = match &confirmation {
             Some(Confirmation::ExitBuffers { keys, index }) => {
@@ -2232,7 +2241,7 @@ fn compose_inner(
                         .ok_or_else(|| anyhow::anyhow!("Select task to open its Herdr agent"))
                         .and_then(|id| {
                             let db = mode.db().expect("dashboard has database");
-                            if herdr_workspace_warning
+                            if herdr_agent_warning
                                 .take()
                                 .is_some_and(|(task, _)| task == id)
                             {
@@ -2267,7 +2276,7 @@ fn compose_inner(
                         |error| format!("{error:#}"),
                     );
                     if agent_not_live {
-                        herdr_workspace_warning = target_id.map(|id| (id, message.clone()));
+                        herdr_agent_warning = target_id.map(|id| (id, message.clone()));
                     }
                     continue;
                 }

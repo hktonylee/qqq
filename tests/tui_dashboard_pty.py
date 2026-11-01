@@ -408,6 +408,13 @@ print(json.dumps({"result": result}))
         env["CREATE_QQQ_BIN"] = binary
         env["HERDR_SOCKET_PATH"] = str(Path(folder) / "herdr.sock")
         env["PATH"] = os.pathsep.join((folder, os.defpath))
+        if scenario.startswith("create_agent_stale"):
+            stale_pane = {"pane_id": "old:p1", "workspace_id": "old", "tab_id": "old:t1",
+                          "agent": "codex", "terminal_id": "stale-terminal"}
+            with sqlite3.connect(Path(folder) / ".qqq/qqq.db") as connection:
+                connection.execute("INSERT INTO herdr_links(task_id,link_json) VALUES(2,?)", (
+                    json.dumps({"server": "created-server", "pane": stale_pane,
+                                "identity": {"agent": "codex", "kind": "terminal", "value": "stale-terminal"}}),))
         configured_prompt = "/goal Custom worker 'quotes' $(literal)\nSecond line qQ"
         prompt_config = Path(folder) / ".config/qqq/config.toml"
         if scenario in ("create_agent_initial_env_tab", "create_agent_initial_env_workspace"):
@@ -497,7 +504,8 @@ elif args[:2] == ["pane", "get"]:
 elif args[:2] in (["agent", "get"], ["agent", "wait"], ["agent", "start"]):
     raise AssertionError("Creation must not launch an agent or perform an unbounded readiness wait")
 elif args == ["agent", "list"]:
-    result = {"agents": [agent_pane, competing_pane]}
+    result = {"agents": [] if scenario.startswith("create_agent_stale") and not (root / "agent-ready").exists()
+              else [agent_pane, competing_pane]}
 elif args[:2] == ["pane", "run"]:
     assert len(args) == 4 and args[2] == "wW:p1", args
     (root / "delivered-prompt").write_text(args[3])
@@ -804,7 +812,25 @@ print(json.dumps({"result": result}))
             elif scenario == "create_agent_cancel":
                 fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
                 visible.resize(120, 40)
+            expected_calls = []
             send(b"\x08")
+            if scenario.startswith("create_agent_stale"):
+                expected_calls.append(["--session", "created-server", "agent", "list"])
+                for attempt in range(2 if scenario == "create_agent_stale_selection" else 1):
+                    wait_visible(lambda: visible.text().splitlines()[-2].startswith("Linked Herdr agent session is not live")
+                                 and visible.text().splitlines()[-1].startswith("Press Ctrl-H again to create a Herdr agent")
+                                 and (visible.x, visible.y) == cursor)
+                    assert "Create Herdr agent" not in visible.text()
+                    assert cli("show", "2")["herdr"] == initial_link
+                    assert [json.loads(line) for line in (Path(folder) / "herdr-calls").read_text().splitlines()] == expected_calls
+                    if scenario == "create_agent_stale_selection" and attempt == 0:
+                        send(b"\x1b[1;2A")
+                        wait_visible(lambda: "Task #1 (New)" in editor_title())
+                        send(b"\x1b[1;2B")
+                        wait_visible(lambda: "Task #2 (New)" in editor_title() and editor_line() == content)
+                        send(b"\x08")
+                        expected_calls.append(["--session", "created-server", "agent", "list"])
+                send(b"\x08")
             if scenario == "create_agent_config_invalid":
                 wait_visible(lambda: "Invalid config" in visible.text().splitlines()[-1])
                 assert "Create Herdr agent" not in visible.text()
@@ -812,7 +838,8 @@ print(json.dumps({"result": result}))
                 prompt_config.write_text("[herdr]\ninitial-prompt = " + json.dumps(configured_prompt) + "\n")
                 send(b"\x08")
             wait_visible(lambda: "Create Herdr agent" in visible.text())
-            assert not (Path(folder) / "herdr-calls").exists()
+            calls_path = Path(folder) / "herdr-calls"
+            assert ([json.loads(line) for line in calls_path.read_text().splitlines()] if calls_path.exists() else []) == expected_calls
             if scenario == "create_agent_cancel":
                 wait_visible(lambda: "┘" in visible.text() and "Ctrl-H create" in visible.text()
                              and not visible.pending and not visible.decoder.getstate()[0])
@@ -860,10 +887,10 @@ print(json.dumps({"result": result}))
                     send(b"\x08")
                     wait_visible(lambda: "Enter a prompt" in visible.text())
                     assert not (Path(folder) / "herdr-calls").exists()
-            if scenario in ("create_agent_cancel", "create_agent_empty", "create_agent_ctrl_c"):
+            if scenario in ("create_agent_cancel", "create_agent_empty", "create_agent_ctrl_c", "create_agent_stale_cancel"):
                 send(b"\x03" if scenario == "create_agent_ctrl_c" else b"\x1b")
                 wait_visible(lambda: "Create Herdr agent" not in visible.text())
-                assert not (Path(folder) / "herdr-calls").exists()
+                assert ([json.loads(line) for line in calls_path.read_text().splitlines()] if calls_path.exists() else []) == expected_calls
             else:
                 send(b"\x08")
                 if scenario == "create_agent_claim_race_error":
@@ -902,7 +929,7 @@ print(json.dumps({"result": result}))
             if scenario == "create_agent_claim_race_error":
                 assert cli("show", "2") == json.loads((Path(folder) / "competing-task.json").read_text())
                 title = title.rstrip().replace("(New)", "(In progress)").ljust(visible.width)
-            elif scenario in ("create_agent_cancel", "create_agent_empty", "create_agent_ctrl_c", "create_agent_identity_error", "create_agent_startup_timeout_error", "create_agent_startup_hang_error", "create_agent_blocked_error", "create_agent_blocked_attach_error"):
+            elif scenario in ("create_agent_cancel", "create_agent_empty", "create_agent_ctrl_c", "create_agent_stale_cancel", "create_agent_identity_error", "create_agent_startup_timeout_error", "create_agent_startup_hang_error", "create_agent_blocked_error", "create_agent_blocked_attach_error"):
                 assert link == initial_link
                 assert not (Path(folder) / "delivered-prompt").exists()
             else:

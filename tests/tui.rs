@@ -461,6 +461,18 @@ fn tui_dashboard_ctrl_h_hint_follows_selected_link_and_external_refresh() {
 }
 
 #[test]
+fn tui_dashboard_ctrl_h_recreates_stale_agents_for_new_tasks() {
+    for scenario in [
+        "create_agent_stale",
+        "create_agent_stale_cancel",
+        "create_agent_stale_selection",
+        "create_agent_stale_no_color",
+    ] {
+        dashboard_scenario(scenario);
+    }
+}
+
+#[test]
 fn tui_dashboard_ctrl_h_opens_workspace_after_stale_agent_warning() {
     for scenario in [
         "handoff_stale_workspace",
