@@ -6,7 +6,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::path::PathBuf;
 use unicode_segmentation::UnicodeSegmentation;
 
-pub(super) const DEFAULT_PROMPT: &str = "/goal Use the `qqq cli --wait`, to look for next task, and work on that. Repeat this forever. Please don't wake up repeatedly to poll the status when running waiter.";
+pub(super) const DEFAULT_PROMPT: &str = "/goal Use the `qqq next --wait`, to look for next task, and work on that. Repeat this forever. Please don't wake up repeatedly to poll the status when running waiter.";
 
 pub(super) enum Action {
     Create(String),

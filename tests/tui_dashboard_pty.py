@@ -914,7 +914,7 @@ print(json.dumps({"result": result}))
                 wait_visible(lambda: visible.y < prompt_cursor[1])
                 send(b"\x1b[B")
                 wait_visible(lambda: (visible.x, visible.y) == prompt_cursor)
-            default_prompt = "/goal Use the `qqq cli --wait`, to look for next task, and work on that. Repeat this forever. Please don't wake up repeatedly to poll the status when running waiter."
+            default_prompt = "/goal Use the `qqq next --wait`, to look for next task, and work on that. Repeat this forever. Please don't wake up repeatedly to poll the status when running waiter."
             prompt = default_prompt
             if scenario.startswith("create_agent_config") and scenario != "create_agent_config_unset":
                 prompt = configured_prompt
