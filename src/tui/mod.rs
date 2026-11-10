@@ -470,7 +470,7 @@ fn action_confirmation_lines(
     }
     if action.is_reopening() || action.is_error_marking() {
         rows.extend(
-            wrap_modal("Y ignores owner checks.", width)
+            wrap_modal("Confirmation ignores owner checks.", width)
                 .into_iter()
                 .map(|text| PopupRow::new(text, PopupKind::Warning)),
         );
@@ -511,23 +511,14 @@ fn action_confirmation_lines(
             );
         }
     }
-    let hint = if action.is_reopening() {
+    let hint = if action.is_reopening() || action.is_completion() || action.is_error_marking() {
         rows.truncate(height.saturating_sub(1));
-        if width >= "y reopen  Y force reopen  n/Esc cancel".len() {
-            "y reopen  Y force reopen  n/Esc cancel"
-        } else if width >= "y reopen  Y force  Esc".len() {
-            "y reopen  Y force  Esc"
+        if width >= "y confirm  n/Esc cancel".len() {
+            "y confirm  n/Esc cancel"
+        } else if width >= "y confirm Esc".len() {
+            "y confirm Esc"
         } else {
-            "y/Y Esc"
-        }
-    } else if action.is_completion() || action.is_error_marking() {
-        rows.truncate(height.saturating_sub(1));
-        if width >= "y confirm  Y force  n/Esc cancel".len() {
-            "y confirm  Y force  n/Esc cancel"
-        } else if width >= "y Y force Esc".len() {
-            "y Y force Esc"
-        } else {
-            "y Y Esc"
+            "y Esc"
         }
     } else {
         "y confirm  n/Esc cancel"
@@ -1205,12 +1196,6 @@ fn compose_inner(
                 "Switch? y/N"
             }
             Some(Confirmation::Switch { .. }) => "Discard changes and switch? (y/N)",
-            Some(Confirmation::Action { action, .. }) if action.is_reopening() => {
-                "y Reopen  Y Force reopen  n/Esc Cancel"
-            }
-            Some(Confirmation::Action { action, .. }) if action.is_error_marking() => {
-                "y Mark error  Y Force  n/Esc Cancel"
-            }
             Some(Confirmation::Action { .. }) => "Confirm action? (y/N)",
             None => &message,
         };
@@ -2123,21 +2108,11 @@ fn compose_inner(
                                 }
                                 Confirmation::Action { action, dirty, .. } => {
                                     let selected = if action.is_completion() {
-                                        if key.code == KeyCode::Char('Y') {
-                                            TaskAction::ForceComplete(action.id())
-                                        } else {
-                                            TaskAction::Complete(action.id())
-                                        }
-                                    } else if key.code == KeyCode::Char('Y')
-                                        && action.is_reopening()
-                                    {
+                                        TaskAction::ForceComplete(action.id())
+                                    } else if action.is_reopening() {
                                         TaskAction::ForceReopen(action.id())
                                     } else if let TaskAction::MarkError(id, reason) = &action {
-                                        if key.code == KeyCode::Char('Y') {
-                                            TaskAction::ForceMarkError(*id, reason.clone())
-                                        } else {
-                                            action.clone()
-                                        }
+                                        TaskAction::ForceMarkError(*id, reason.clone())
                                     } else {
                                         action.clone()
                                     };

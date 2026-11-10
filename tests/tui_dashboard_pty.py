@@ -588,7 +588,7 @@ print(json.dumps({"result": result}))
     elif scenario.startswith("orphan_reopen"):
         args.extend(["--session", "reviewer"])
     elif scenario != "force_error_sessionless" and (scenario in ("actions_basic", "actions_rejected", "actions_narrow") or scenario.startswith(("menu_retry_", "menu_error_", "force_reopen", "force_error", "blocked")) or (scenario.startswith("force_complete") and not scenario.startswith("force_complete_herdr_") and scenario not in ("force_complete_sessionless", "force_complete_owner_db_error"))):
-        args.extend(["--session", "other" if scenario == "menu_error_rejected" else "worker"])
+        args.extend(["--session", "other" if scenario == "menu_error_rejected" or scenario.startswith("blocked") else "worker"])
     if scenario in ("archive_included", "actions_basic", "actions_rejected", "archived_toggle_included"):
         args.append("--include-archived")
     if scenario.startswith("views_startup"):
@@ -3157,6 +3157,7 @@ print(json.dumps({"result": result}))
             blocked = cli("show", "2")
             assert blocked["task"]["description"] == "Second"
             assert blocked["events"][-1]["action"] == "blocked"
+            assert blocked["events"][-1]["session"] == "other"
             assert blocked["messages"][-1]["body"] == reason
             for field in ("harness_name", "harness_session", "orchestrator_name", "orchestrator_session"):
                 assert blocked["task"][field] == initial["task"][field]
@@ -3949,7 +3950,7 @@ print(json.dumps({"result": result}))
             else:
                 send(reason.encode())
             send(b"\r")
-            modal_ready(f"Mark error task #{task_id}?", "y confirm  Y force  n/Esc cancel")
+            modal_ready(f"Mark error task #{task_id}?", "y confirm  n/Esc cancel")
             assert "Reason:" in visible.text(), visible.text()
             if dirty:
                 assert "Lose draft?" in visible.text(), visible.text()
@@ -3966,40 +3967,33 @@ print(json.dumps({"result": result}))
             assert cli("show", str(task_id)) == initial_detail
             error_prompt()
             send(reason.encode() + b"\r")
-            modal_ready(f"Mark error task #{task_id}?", "y confirm  Y force  n/Esc cancel")
+            modal_ready(f"Mark error task #{task_id}?", "y confirm  n/Esc cancel")
             if scenario == "menu_error_live":
                 cli("edit", "1", "--set-status", "new", "--session", "worker")
                 cli("next", "--local", "--session", "outside", "--filter", "id == 1")
                 initial_detail = cli("show", "1")
             send(b"y")
-            if scenario in ("menu_error_rejected", "menu_error_live", "menu_error_new"):
-                modal_ready("Action error", "Up/Down Esc")
-                assert cli("show", str(task_id)) == initial_detail
-                send(b"\x1b")
-                wait_frame(lambda: "Action error" not in visible.text()
-                           and editor_line().startswith(expected_editor))
-            else:
-                wait_frame(lambda: f"Task #{task_id} (Error)" in editor_title()
-                           and visible.text().splitlines()[-1].startswith(f"Marked error #{task_id}"))
-                detail = cli("show", str(task_id))
-                task = detail["task"]
-                assert task["status"] == "error"
-                for field in ("description", "priority", "parent_id", "content_revision"):
-                    assert task[field] == initial_detail["task"][field]
-                for field in ("harness_name", "harness_session", "orchestrator_name", "orchestrator_session"):
-                    assert task[field] == initial_detail["task"][field]
-                assert detail["images"] == initial_detail["images"]
-                assert len(detail["events"]) == len(initial_detail["events"]) + 1
-                assert detail["events"][-1]["action"] == "error"
-                assert len(detail["messages"]) == len(initial_detail["messages"]) + 1
-                assert detail["messages"][-1]["body"] == reason
-                with sqlite3.connect(Path(folder) / ".qqq/qqq.db") as connection:
-                    assert connection.execute("SELECT claim_key FROM tasks WHERE id=?", (task_id,)).fetchone() == (None,)
-                assert cli("next", "--local", "--session", "probe", "--filter", f"id == {task_id}") is None
-                send(b"\x07")
-                wait_visible(lambda: "r Retry" in visible.text())
-                send(b"\x1b")
-                wait_frame(lambda: "Task actions" not in visible.text() and editor_line().startswith(label))
+            wait_frame(lambda: f"Task #{task_id} (Error)" in editor_title()
+                       and visible.text().splitlines()[-1].startswith(f"Marked error #{task_id}"))
+            detail = cli("show", str(task_id))
+            task = detail["task"]
+            assert task["status"] == "error"
+            for field in ("description", "priority", "parent_id", "content_revision"):
+                assert task[field] == initial_detail["task"][field]
+            for field in ("harness_name", "harness_session", "orchestrator_name", "orchestrator_session"):
+                assert task[field] == initial_detail["task"][field]
+            assert detail["images"] == initial_detail["images"]
+            assert len(detail["events"]) == len(initial_detail["events"]) + 1
+            assert detail["events"][-1]["action"] == "error"
+            assert len(detail["messages"]) == len(initial_detail["messages"]) + 1
+            assert detail["messages"][-1]["body"] == reason
+            with sqlite3.connect(Path(folder) / ".qqq/qqq.db") as connection:
+                assert connection.execute("SELECT claim_key FROM tasks WHERE id=?", (task_id,)).fetchone() == (None,)
+            assert cli("next", "--local", "--session", "probe", "--filter", f"id == {task_id}") is None
+            send(b"\x07")
+            wait_visible(lambda: "r Retry" in visible.text())
+            send(b"\x1b")
+            wait_frame(lambda: "Task actions" not in visible.text() and editor_line().startswith(label))
             if scenario.endswith("no_color"):
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen
         elif scenario.startswith("force_error"):
@@ -4053,20 +4047,13 @@ print(json.dumps({"result": result}))
                         wait_visible(lambda: f"Task #{task_id} (" in editor_title())
                     before_error = cli("show", str(task_id))
                     error_confirmation(task_id)
-                    send(b"y")
-                    wait_visible(lambda: "Action error" in visible.text())
-                    assert cli("show", str(task_id)) == before_error
-                    send(b"\x1b")
-                    wait_visible(lambda: "Action error" not in visible.text())
-                    error_confirmation(task_id)
                     if scenario == "force_error_sessionless":
-                        calls_before_force = force_error_calls.read_text()
-                        assert calls_before_force
-                    send(b"Y")
+                        calls_before_force = force_error_calls.read_bytes() if force_error_calls.exists() else b""
+                    send(b"y" if task_id == 1 else b"Y")
                     wait_frame(lambda: f"Task #{task_id} (Error)" in editor_title()
                                and f"Marked error #{task_id}" in visible.text())
                     if scenario == "force_error_sessionless":
-                        assert force_error_calls.read_text() == calls_before_force
+                        assert (force_error_calls.read_bytes() if force_error_calls.exists() else b"") == calls_before_force
                     after_error = cli("show", str(task_id))
                     assert after_error["task"]["description"] == before_error["task"]["description"]
                     assert after_error["events"][:-1] == before_error["events"]
@@ -4098,7 +4085,7 @@ print(json.dumps({"result": result}))
                 wait_visible(lambda: "o Reopen" in visible.text())
                 send(b"o")
                 wait_visible(lambda: "Reopen task #1?" in visible.text())
-                wait_visible(lambda: "y reopen" in visible.text() and "Y force" in visible.text())
+                wait_visible(lambda: "y confirm" in visible.text())
 
             open_reopen()
             if "cursor" in scenario:
@@ -4128,12 +4115,6 @@ print(json.dumps({"result": result}))
                     visible.resize(32, 12)
                     wait_visible(lambda: "Reopen task #1?" in visible.text())
                 send(b"y")
-                wait_visible(lambda: "Action error" in visible.text())
-                assert cli("show", "1") == initial_detail
-                send(b"\x1b")
-                wait_visible(lambda: "Action error" not in visible.text())
-                open_reopen()
-                send(b"Y")
                 wait_frame(lambda: "Task #1 (New)" in editor_title()
                            and "Reopened #1" in visible.text()
                            and editor_line().startswith("Foreign item"))
@@ -4195,23 +4176,15 @@ print(json.dumps({"result": result}))
             if scenario.endswith("live"):
                 response_path.write_text(json.dumps({"result": {"agents": [owner_pane]}}))
             send(b"y")
-            if scenario.endswith("live"):
-                wait_visible(lambda: "Action error" in visible.text()
-                             and "still live" in visible.text())
-                assert cli("show", "1") == initial_detail
-                send(b"\x1b")
-                wait_visible(lambda: "Action error" not in visible.text())
-                if scenario == "orphan_reopen_force_live":
-                    send(b"\x07")
-                    wait_visible(lambda: ("o Reopen" if live else "r Retry") in visible.text())
-                    send(shortcut)
-                    wait_visible(lambda: f"{action} task #1?" in visible.text())
-                    send(b"Y")
-                    wait_visible(lambda: "Task #1 (New)" in editor_title()
-                                 and "Reopened #1" in visible.text())
-                    wait_caret(lambda: visible.cursor_visible,
-                               (len("Preserve body"), editor_row() + 2))
-                    assert cli("show", "1")["events"][-1]["action"] == "reopen"
+            if live:
+                wait_visible(lambda: "Task #1 (New)" in editor_title()
+                             and "Reopened #1" in visible.text())
+                wait_caret(lambda: visible.cursor_visible,
+                           (len("Preserve body"), editor_row() + 2))
+                detail = cli("show", "1")
+                assert detail["events"][-1]["action"] == "reopen"
+                assert detail["events"][-1]["session"] == "reviewer"
+                assert detail["herdr"] == initial_detail["herdr"]
             else:
                 wait_visible(lambda: "Task #1 (New)" in editor_title()
                              and "Retried #1" in visible.text()
@@ -4500,7 +4473,7 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: prompt_visible("Parent task"))
             close_menu()
             for index, (key, prompt) in enumerate([
-                ("c", "Force complete task"), ("e", "Error task"), ("o", "Reopen task"),
+                ("c", "Complete task"), ("e", "Error task"), ("o", "Reopen task"),
                 ("p", "Priority task"), ("d", "Parent task"), ("a", "Archive task"),
             ]):
                 open_menu()
@@ -4535,10 +4508,10 @@ print(json.dumps({"result": result}))
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
         elif scenario.startswith("force_complete_herdr_"):
             compact = scenario.endswith("compact")
-            force_title = "Force complete" if compact else "Force complete task #4?"
+            force_title = "Complete task" if compact else "Complete task #4?"
 
             def passive_popup(title):
-                wait_visible(lambda: title in visible.text() and "Y force" in visible.text()
+                wait_visible(lambda: title in visible.text() and "y confirm" in visible.text()
                              and not visible.cursor_visible and not visible.pending
                              and not visible.decoder.getstate()[0]
                              and screen.endswith(b"\x1b[?25l"))
@@ -4563,13 +4536,13 @@ print(json.dumps({"result": result}))
                              and screen.endswith(f"\x1b[{editor_row() + 2};2H".encode()))
             send(b"\x07c")
             if "confirm_failure" in scenario:
-                passive_popup("Complete task #4?")
+                passive_popup(force_title)
                 assert "Lose draft?" in visible.text()
                 (Path(folder) / "herdr-fail").touch()
             else:
                 passive_popup(force_title)
             if compact:
-                for columns, rows, label in ((12, 8, "y Y Esc"), (11, 7, "Resize term"), (24, 14, "Y force")):
+                for columns, rows, label in ((12, 8, "y Esc"), (11, 7, "Resize term"), (24, 14, "y confirm")):
                     clear_capture()
                     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", rows, columns, 0, 0))
                     visible.resize(columns, rows)
@@ -4578,37 +4551,28 @@ print(json.dumps({"result": result}))
                                  and not visible.pending and not visible.decoder.getstate()[0]
                                  and screen.endswith(b"\x1b[?25l"))
                 assert cli("show", "4") == task_before
-            clear_capture()
-            send(b"y")
-            passive_popup("Herdr failed:" if compact else "Herdr failed: transport down")
-            assert "Action error" not in visible.text(), visible.text()
-            assert cli("show", "4") == task_before
-            clear_capture()
-            send(b"y")
-            passive_popup("Herdr failed:" if compact else "Herdr failed: transport down")
-            assert cli("show", "4") == task_before
-
             # Space, navigation, and clicks cannot select force or alter draft.
             clear_capture()
             send(b" \x1b[A\x1b[B\x19\x1bY")
             click(1, 1)
             click(visible.width // 2, visible.height // 2)
-            passive_popup("Herdr failed:" if compact else "Herdr failed: transport down")
+            passive_popup(force_title)
             assert cli("show", "4") == task_before
             if "confirm_failure" not in scenario or scenario.endswith("no_color"):
                 send(b"n")
-                wait_visible(lambda: "Y force" not in visible.text()
+                wait_visible(lambda: "y confirm" not in visible.text()
                              and editor_line().startswith("XOwned item")
                              and visible.cursor_visible
                              and (visible.x, visible.y) == (1, editor_row() + 1))
                 assert cli("show", "4") == task_before
                 send(b"\x07c")
                 passive_popup(force_title)
-            calls_before_force = (Path(folder) / "herdr-calls").read_bytes()
-            send(b"Y")
+            calls_path = Path(folder) / "herdr-calls"
+            calls_before_force = calls_path.read_bytes() if calls_path.exists() else b""
+            send(b"y")
             wait_visible(lambda: visible.text().splitlines()[-1].startswith("Completed #4")
                          and editor_line().startswith("Owned item") and visible.cursor_visible)
-            assert (Path(folder) / "herdr-calls").read_bytes() == calls_before_force
+            assert (calls_path.read_bytes() if calls_path.exists() else b"") == calls_before_force
             completed = cli("show", "4")
             assert completed["task"]["status"] == "completed"
             assert completed["task"]["description"] == "Owned item"
@@ -4625,18 +4589,15 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: "Task #1 (In progress)" in editor_title())
             task_before = cli("show", "1")
             send(b"\x01X\x07c")
-            wait_visible(lambda: "Action error" in visible.text() and "malformed JSON" in visible.text())
-            assert "Force complete" not in visible.text(), visible.text()
+            wait_visible(lambda: "Complete task #1?" in visible.text())
             assert cli("show", "1") == task_before
-            send(b"\x1b")
-            wait_visible(lambda: "Action error" not in visible.text()
-                         and editor_line().startswith("XForeign item"))
-            send(b"\x7f")
-            wait_visible(lambda: editor_line().startswith("Foreign item"))
+            send(b"y")
+            wait_visible(lambda: "Task #1 (Completed)" in editor_title())
+            assert cli("show", "1")["events"][-1]["session"] == "manual"
         elif scenario.startswith("force_complete"):
             def passive_popup(title):
                 wait_visible(lambda: title in visible.text() and "y confirm" in visible.text()
-                             and "Y force" in visible.text() and not visible.cursor_visible
+                             and not visible.cursor_visible
                              and not visible.pending and not visible.decoder.getstate()[0]
                              and screen.endswith(b"\x1b[?25l"))
                 assert "[ ] Force complete" not in visible.text(), visible.text()
@@ -4649,29 +4610,20 @@ print(json.dumps({"result": result}))
             send(b"\x01X")
             wait_visible(lambda: editor_line().startswith("XForeign item"))
             send(b"\x07c")
-            passive_popup("Force complete task #1?")
-            assert "Complete without matching task owner." in visible.text()
+            passive_popup("Complete task #1?")
             assert "Lose draft?" in visible.text()
             clear_capture()
             send(b" \x1b[A\x1b[B\x19\x1bY")
             click(visible.width // 2, visible.height // 2)
             clear_capture()
-            popup_before_normal = visible.text()
-            send(b"y")
-            wait_visible(lambda: visible.text() != popup_before_normal
-                         and "Y force" in visible.text() and not visible.cursor_visible)
-            passive_popup("Force complete task #1?")
-            assert cli("show", "1") == before_force
-            if scenario != "force_complete_sessionless":
-                assert "not claimed" in visible.text(), visible.text()
             send(b"n")
-            wait_visible(lambda: "Y force" not in visible.text()
+            wait_visible(lambda: "y confirm" not in visible.text()
                          and editor_line().startswith("XForeign item") and visible.cursor_visible
                          and (visible.x, visible.y) == (1, editor_row() + 1))
             assert cli("show", "1") == before_force
             send(b"\x07\r")
-            passive_popup("Force complete task #1?")
-            send(b"Y")
+            passive_popup("Complete task #1?")
+            send(b"y")
             wait_visible(lambda: "Task #1 (Completed)" in editor_title()
                          and editor_line().startswith("Foreign item") and visible.cursor_visible)
             completed = cli("show", "1")
@@ -4687,12 +4639,12 @@ print(json.dumps({"result": result}))
                 wait_visible(lambda: f"Task #{task_id}" in editor_title())
                 task_before = cli("show", str(task_id))
                 send(b"\x07c")
-                passive_popup(f"Force complete task #{task_id}?")
+                passive_popup(f"Complete task #{task_id}?")
                 send(b"\x1b")
-                wait_visible(lambda: "Y force" not in visible.text() and visible.cursor_visible)
+                wait_visible(lambda: "y confirm" not in visible.text() and visible.cursor_visible)
                 assert cli("show", str(task_id)) == task_before
                 send(b"\x07c")
-                passive_popup(f"Force complete task #{task_id}?")
+                passive_popup(f"Complete task #{task_id}?")
                 send(b"Y")
                 wait_visible(lambda: f"Task #{task_id} (Completed)" in editor_title())
                 after = cli("show", str(task_id))
@@ -4703,26 +4655,11 @@ print(json.dumps({"result": result}))
             click(5, task_row("Owned item"))
             wait_visible(lambda: "Task #4 (In progress)" in editor_title())
             send(b"\x07c")
-            if scenario == "force_complete_sessionless":
-                passive_popup("Force complete task #4?")
-            else:
-                passive_popup("Complete task #4?")
-                assert "Complete without matching task owner." not in visible.text()
-                assert "Force complete task" not in visible.text(), visible.text()
+            passive_popup("Complete task #4?")
             if scenario == "force_complete_race":
                 cli("edit", "4", "--set-status", "new", "--session", "worker")
                 cli("next", "--local", "--session", "new-owner")
-                transferred = cli("show", "4")
-                clear_capture()
-                send(b"y")
-                passive_popup("Task 4 is not claimed by session worker")
-                assert cli("show", "4") == transferred
-                send(b"\x1b")
-                wait_visible(lambda: "Task 4 is not claimed by session worker" not in visible.text()
-                             and "Y force" not in visible.text() and visible.cursor_visible)
-                send(b"\x07c")
-                passive_popup("Force complete task #4?")
-            send(b"Y" if scenario in ("force_complete_sessionless", "force_complete_race", "force_complete_native") else b"y")
+            send(b"y")
             wait_visible(lambda: "Task #4 (Completed)" in editor_title())
             event = cli("show", "4")["events"][-1]
             assert event["action"] == "complete"
@@ -4790,7 +4727,7 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: "XFresh item" in visible.text())
             assert cli("show", "4")["task"]["priority"] == 0
             assert "{0}" not in visible.text()
-            action("c", "Force complete task #4?")
+            action("c", "Complete task #4?")
             send(b"n")
             wait_visible(lambda: editor_line().startswith("XFresh item"))
             assert cli("show", "4")["task"]["status"] == "new"
@@ -4922,8 +4859,8 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: "Owned item" in visible.text() and "Hidden item" in visible.text())
             rejected_action("Owned item", 1, "a", "Archive task #1?",
                             "Task 1 is in progress and cannot be archived")
-            rejected_action("Owned item", 1, "o", "Reopen task #1?",
-                            "Task 1 must be completed to reopen")
+            rejected_action("Fresh item", 4, "o", "Reopen task #4?",
+                            "Task 4 must be completed, in progress or error to force reopen")
             rejected_action("Failed item", 2, "r", "Retry task #2?",
                             "Task 2 is no longer in error",
                             lambda: cli("edit", "2", "--set-status", "new"))

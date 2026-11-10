@@ -209,7 +209,7 @@ Offline font fallbacks: Georgia, system UI sans, and system monospace. No remote
 <rect class="node-box" x="768" y="88" width="272" height="96" rx="8"/>
 <text class="node-tag" x="784" y="108">DIALOG</text>
 <text class="node-name" x="904" y="136" text-anchor="middle">Confirm action</text>
-<text class="node-sub" x="904" y="160" text-anchor="middle">y normal · Y force¹</text>
+<text class="node-sub" x="904" y="160" text-anchor="middle">y / Y confirm</text>
 </g>
 <g class="node step" data-box="768,320,272,80">
 <rect class="node-box" x="768" y="320" width="272" height="80" rx="8"/>
@@ -242,14 +242,14 @@ Offline font fallbacks: Georgia, system UI sans, and system monospace. No remote
 <ul>
 <li>Ctrl+G selects the bulk menu whenever any bulk selection exists, even if a single task is focused.</li>
 <li>Menu Up/Down wraps; Enter activates highlighted item. c=Complete (unless completed), e=Mark error (unless completed/error), r=Retry (error only), o=Reopen (unless error), p=Priority, d=Parent, a=Archive/Unarchive. Menu visibility is not DB validity: New offers Reopen but execution may reject it.</li>
-<li>r/o/a always go to action confirmation, even with a clean draft. c also confirms after resolving the completion action; an error in that resolution opens Action error directly.</li>
+<li>r/o/a/c always go to action confirmation, even with a clean draft. Completion does not discover or check the owner.</li>
 <li>p/d open scalar input. Enter validates priority -100..100, or parent ID/none. Validation errors remain inline. Valid input with a clean draft executes directly; a dirty draft goes to confirmation.</li>
 <li>e opens error reason. Enter requires nonblank reason, then always confirms.</li>
 <li>Escape closes the menu or priority/parent/error-reason input directly to the editor, dropping entered values. Inputs do not return to the menu. The earlier filter-clear guard can consume the first Escape; q/Q remains literal text in inputs.</li>
-<li>Confirmation y executes normal action; Y forces Complete, Reopen and Mark error. Other actions y/Y are equivalent. n/N/Enter/Escape cancel. q/Q map to Escape.</li>
-<li>Completion callback initially labels confirmation Complete when this session owns the selected task, otherwise Force complete (also when identity discovery is unavailable). Even a Force complete-labelled confirmation still maps lowercase y to normal Complete; uppercase Y performs the force.</li>
+<li>Confirmation y and Y both force Complete, Reopen, Mark error and Mark blocked, bypassing ownership checks. Other actions y/Y are equivalent. n/N/Enter/Escape cancel. q/Q map to Escape.</li>
+<li>Completion always asks for confirmation without resolving owner or Herdr identity.</li>
 <li>Successful actions reload task state and discard active unsaved changes after confirmation. Archiving with archives hidden moves to general New.</li>
-<li>A normal Complete failing due to missing identity/dispatch/ownership stays in the same confirmation with error and force option. Other failures, including Force complete, Reopen, Mark error, priority and parent, open the scrollable Action error dialog.</li>
+<li>Database, state and validation failures open the scrollable Action error dialog.</li>
 <li>Action error Enter/Escape/q/Q closes; Up/k and Down/j scroll. Ctrl+C follows dashboard cancellation before this local handler and can navigate to New or a discard-switch footer for a saved task.</li>
 <li>Ctrl+C on a saved task during a completion confirmation can replace it with discard-switch or navigate to New; reopen/mark-error confirmations instead retain the prompt on Ctrl+C. ExitBuffers ignores Ctrl+C.</li>
 </ul>
@@ -873,13 +873,13 @@ Offline font fallbacks: Georgia, system UI sans, and system monospace. No remote
 <h2 id="review-heading">Behaviors to review</h2>
 <p class="sources">Source: <a href="../tests/tui.rs">Existing PTY regression scenarios (source references, not runtime proof)</a></p>
 <ul>
-<li>Enter applies values but cancels confirmation dialogs; Y means force only for selected single-task actions.</li>
+<li>Enter applies values but cancels confirmation dialogs; y and Y both confirm single-task actions.</li>
 <li>Some first Escape/Ctrl+C events clear filter rather than close Action UI.</li>
 <li>Ctrl+C closes most local dialogs but navigates from saved task Action UI, retains passive confirmations, and ignores ExitBuffers.</li>
 <li>Bulk cancellation closes wizard and retains selection; creating view returns to picker without applying it.</li>
 <li>New draft Ctrl+C discards current draft without confirmation; Escape uses a discard-switch footer.</li>
-<li>Complete&#x27;s normal owner/dispatch error can recover in place via Y; reopen/error failures open Action error instead.</li>
-<li>Force-complete-labelled dialog still requires uppercase Y for force.</li>
+<li>Confirmed actions skip ownership lookup; state and database failures open Action error.</li>
+<li>Lowercase y and uppercase Y apply the same confirmed action.</li>
 </ul>
 </section>
 </main>

@@ -575,7 +575,7 @@ Ctrl-G's task menu supports arrows/Enter or letter shortcuts:
 | --- | --- |
 | `c` | Complete; hidden on completed tasks |
 | `e` | Mark error with a nonblank reason; hidden on Error/Blocked/completed tasks |
-| `b` | Mark an owned in-progress task Blocked with the information or help needed |
+| `b` | Mark an in-progress task Blocked with the information or help needed |
 | `r` | Return an Error or Blocked task to New |
 | `o` | Reopen a non-error task |
 | `p` | Set priority (-100..100) |
@@ -586,22 +586,24 @@ Menus skip unavailable actions and refresh availability after status changes.
 Status changes require confirmation; priority/parent changes ask when the draft
 is dirty. Rejected actions keep the draft and display the error.
 
-| Confirmation | Lowercase `y` | Uppercase `Y` |
-| --- | --- | --- |
-| Complete | Require the current owner of an in-progress task | Force a new, active or error task to completed |
-| Reopen | Apply normal completed/orphaned-owner checks | Force a completed or active task to new |
-| Mark error | Require the current owner of an in-progress task | Force a new or active task to error |
+Both `y` and `Y` confirm the action and bypass ownership checks:
 
-Force is always explicit and skips owner/Herdr lookup. Status changes retain
+| Confirmation | Result |
+| --- | --- |
+| Complete | Force a new, active, error or blocked task to completed |
+| Reopen | Force a completed or active task to new |
+| Mark error | Force a new or active task to error |
+| Mark blocked | Force an active task to blocked |
+
+Confirmation skips owner/Herdr lookup. Status changes retain
 assignment metadata and the saved link; leaving in progress clears active ownership.
 Error marking records the reason message and error event. Content and dependency
 edges stay intact; archive/dependency guards still apply where required.
 
 `n`, Enter or Esc cancels confirmation. Reopen/Mark-error confirmations hide the
 caret, ignore editing/navigation and Ctrl-C, and preserve filters on Esc.
-Completion errors retain normal/force choices after lookup or ownership failures;
-unrelated database/input errors keep ordinary error handling. Force never happens
-automatically. Action-error text scrolls with Up/Down or `j`/`k`; Enter closes it.
+Database/input errors open the action-error dialog. Action-error text scrolls
+with Up/Down or `j`/`k`; Enter closes it.
 In other menus/errors, Esc clears an active filter before closing the popup.
 
 ### Clearing and exit

@@ -97,6 +97,46 @@ fn composition() -> Composition {
 }
 
 #[test]
+fn force_blocked_preserves_assignment_and_records_operator_reason_atomically() {
+    let (mut db, _dir) = database();
+    let task = db.add("Foreign task", None, &[]).unwrap();
+    db.next_with_identity("owner", None, None, &identity::Identity::default())
+        .unwrap();
+    let before = db.show(task.id).unwrap();
+    for (actor, reason) in [(" ", "Need API"), ("operator", " \n ")] {
+        assert!(db.force_blocked(task.id, actor, reason).is_err());
+        assert_eq!(db.show(task.id).unwrap(), before);
+    }
+    db.conn.execute_batch("CREATE TRIGGER reject_block BEFORE INSERT ON messages BEGIN SELECT RAISE(ABORT,'no message'); END;").unwrap();
+    assert!(db.force_blocked(task.id, "operator", "Need API").is_err());
+    assert_eq!(db.show(task.id).unwrap(), before);
+    db.conn.execute_batch("DROP TRIGGER reject_block").unwrap();
+    assert_eq!(
+        db.force_blocked(task.id, "operator", "  Need API  ")
+            .unwrap()
+            .status,
+        "blocked"
+    );
+    let after = db.show(task.id).unwrap();
+    for field in ["description", "content_revision", "harness_session"] {
+        assert_eq!(after["task"][field], before["task"][field]);
+    }
+    assert_eq!(after["events"][1]["action"], "blocked");
+    assert_eq!(after["events"][1]["session"], "operator");
+    assert_eq!(after["messages"][0]["body"], "Need API");
+    assert_eq!(after["messages"][0]["session"], "operator");
+    assert!(db.owned_with_name("owner", None).unwrap().is_none());
+    assert!(db.force_blocked(task.id, "operator", "Again").is_err());
+    assert_eq!(db.show(task.id).unwrap(), after);
+    assert!(db.force_blocked(999, "operator", "Missing").is_err());
+    let fresh = db.add("Fresh", None, &[]).unwrap();
+    assert!(
+        db.force_blocked(fresh.id, "operator", "Not active")
+            .is_err()
+    );
+}
+
+#[test]
 fn force_completion_preserves_content_and_history_for_unfinished_tasks() {
     for state in ["new", "in_progress", "error"] {
         let (mut db, dir) = database();

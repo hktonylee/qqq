@@ -1699,6 +1699,44 @@ impl Db {
         tx.commit()?;
         Ok(task)
     }
+    pub fn force_blocked(&mut self, id: i64, actor: &str, reason: &str) -> Result<Task> {
+        nonempty(actor, "Actor")?;
+        let reason = reason.trim();
+        nonempty(reason, "Blocked reason")?;
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        ensure!(
+            tx.execute(
+                "UPDATE tasks SET status='blocked',claim_key=NULL,
+            updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
+            WHERE id=? AND status='in_progress'",
+                [id]
+            )? == 1,
+            transition_error(
+                &tx,
+                id,
+                &["in_progress"],
+                None,
+                format!("Task {id} must be in progress to force mark blocked")
+            )?
+        );
+        tx.execute(
+            "INSERT INTO events(task_id,session,action) VALUES (?,?,'blocked')",
+            params![id, actor],
+        )?;
+        tx.execute(
+            "INSERT INTO messages(task_id,body,session) VALUES (?,?,?)",
+            params![id, reason, actor],
+        )?;
+        let task = tx.query_row(
+            &format!("SELECT {TASK_COLUMNS} FROM tasks WHERE id=?"),
+            [id],
+            task_row,
+        )?;
+        tx.commit()?;
+        Ok(task)
+    }
     pub fn force_reopen(&mut self, id: i64, actor: &str) -> Result<Task> {
         self.reopen_inner(id, actor, true)
     }

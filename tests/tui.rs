@@ -928,7 +928,7 @@ fn tui_dashboard_reopen_popup_hides_cursor_and_restores_dirty_caret() {
 }
 
 #[test]
-fn tui_dashboard_force_reopen_distinguishes_uppercase_confirmation() {
+fn tui_dashboard_confirmed_reopen_ignores_ownership() {
     for name in [
         "force_reopen",
         "force_reopen_no_color",
@@ -954,7 +954,7 @@ fn tui_dashboard_mark_error_requires_reason_and_confirmation() {
 }
 
 #[test]
-fn tui_dashboard_force_error_uses_explicit_uppercase_confirmation() {
+fn tui_dashboard_confirmed_error_ignores_ownership() {
     for name in [
         "force_error",
         "force_error_no_color",
@@ -977,7 +977,7 @@ fn tui_dashboard_mark_error_keeps_dirty_draft_until_confirmed() {
 }
 
 #[test]
-fn tui_dashboard_mark_error_enforces_current_owner_and_state() {
+fn tui_dashboard_mark_error_accepts_foreign_and_changed_owners() {
     for name in ["menu_error_rejected", "menu_error_live", "menu_error_new"] {
         dashboard_scenario(name);
     }

@@ -730,25 +730,7 @@ fn execute(
                     }?;
                     Ok(tui::SavedTask::from(&task))
                 },
-                &mut |db, id| {
-                    let owner = match resolved_owner(session_input, project_dir, db) {
-                        Ok(owner) => Some(owner),
-                        Err(error) if tui::completion::discovery_unavailable(&error) => None,
-                        Err(error) => return Err(error),
-                    };
-                    let owned = owner
-                        .as_ref()
-                        .map(|owner| {
-                            db.owned_with_name(&owner.key, overrides.harness_name.as_deref())
-                        })
-                        .transpose()?
-                        .flatten();
-                    Ok(if owned.is_some_and(|task| task.id == id) {
-                        tui::TaskAction::Complete(id)
-                    } else {
-                        tui::TaskAction::ForceComplete(id)
-                    })
-                },
+                &mut |_db, id| Ok(tui::TaskAction::Complete(id)),
                 &mut |db, action| match action {
                     tui::TaskAction::Complete(id) => {
                         let owner = resolved_owner(session_input, project_dir, db)?;
@@ -770,19 +752,7 @@ fn execute(
                         )
                     }
                     tui::TaskAction::MarkBlocked(id, reason) => {
-                        let owner = resolved_owner(session_input, project_dir, db)?;
-                        db.edit_with_priority(
-                            id,
-                            None,
-                            Some(db::EditTransition::Blocked {
-                                session: &owner.key,
-                                reason: &reason,
-                                harness_name: overrides.harness_name.as_deref(),
-                            }),
-                            &[],
-                            None,
-                            None,
-                        )
+                        db.force_blocked(id, session_input.unwrap_or("manual"), &reason)
                     }
                     tui::TaskAction::ForceComplete(id) => {
                         db.force_complete(id, session_input.unwrap_or("manual"))

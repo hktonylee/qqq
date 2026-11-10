@@ -38,22 +38,23 @@ stateDiagram-v2
 | --- | --- | --- |
 | Create → `new` | `qqq add`, import, or recipe application | New tasks start unarchived and unassigned. |
 | `new` → `in_progress` | `next` or a worker claims a task | The task must be unarchived and ready: its parent and every prerequisite are completed. |
-| `in_progress` → `completed` | `qqq edit ID --complete` or TUI Complete | The current owner must match. The TUI also offers an explicit force-complete confirmation. |
+| `in_progress` → `completed` | `qqq edit ID --complete` or TUI Complete | The CLI requires the current owner. TUI confirmation bypasses ownership checks. |
 | `in_progress` → `new` | `qqq edit ID --set-pending` or `--set-status new` | The current owner must match; this releases the claim. |
 | `in_progress` → `error` | `qqq edit ID --set-status error --reason TEXT` | The current owner must match and the reason must be nonblank. Owner preflight can also set `error` when it proves the claim owner is dead. |
 | `in_progress` → `blocked` | `qqq edit ID --set-status blocked --reason TEXT` | The current owner must match and the reason must be nonblank. |
 | `error` or `blocked` → `new` | `qqq edit ID --set-status new` or TUI Retry | No owner is required. The reason and prior history remain. |
 | `completed` → `new` | `qqq edit ID --reopen` or TUI Reopen | The task must be unarchived. Reopening also checks unfinished archived dependencies. |
-| `in_progress` → `new` via Reopen | `qqq edit ID --reopen` | Allowed only when the saved Herdr owner can be verified absent. The TUI offers a separate force-reopen confirmation. |
+| `in_progress` → `new` via Reopen | `qqq edit ID --reopen` | The CLI requires the saved Herdr owner to be verified absent. TUI confirmation bypasses ownership checks. |
 | Preflight `error` → `new` | `qqq edit ID --reopen` | Normal reopen accepts an error only when its latest relevant error event came from owner preflight. Use Retry for manually reported errors. |
 
 ## Explicit force actions
 
-The TUI's uppercase `Y` confirmation deliberately bypasses the normal owner or
+The TUI's `y` and `Y` confirmations deliberately bypass the normal owner or
 reopen checks. It can:
 
 - force-complete a `new`, `in_progress`, `error`, or `blocked` task;
 - force-mark a `new` or `in_progress` task as `error`;
+- force-mark an `in_progress` task as `blocked`;
 - force-reopen a `completed` or `in_progress` task to `new`.
 
 The CLI also accepts `qqq edit ID --set-status new --force` to return an
