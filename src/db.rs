@@ -1443,6 +1443,18 @@ impl Db {
         )?;
         Ok(())
     }
+    pub fn clear_assignment(&mut self, id: i64) -> Result<Task> {
+        ensure!(
+            self.conn.execute(
+                "UPDATE tasks SET harness_name=NULL,harness_session=NULL,
+                 orchestrator_name=NULL,orchestrator_session=NULL,
+                 updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
+                [id]
+            )? == 1,
+            crate::errors::Info::missing_task(id)
+        );
+        self.task(id)
+    }
     pub fn owned_with_name(
         &self,
         session: &str,

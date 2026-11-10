@@ -97,6 +97,88 @@ fn composition() -> Composition {
 }
 
 #[test]
+fn clear_assignment_preserves_content_status_ownership_and_saved_link() {
+    for state in [
+        "new",
+        "in_progress",
+        "completed",
+        "error",
+        "blocked",
+        "archived",
+    ] {
+        let (mut db, _dir) = database();
+        let task = db.add("Keep content", None, &composition().images).unwrap();
+        let link = herdr::Link {
+            server: None,
+            identity: herdr::AgentSession {
+                agent: "codex".into(),
+                kind: "id".into(),
+                value: "owner".into(),
+            },
+            pane: herdr::Pane {
+                pane_id: "w1:p1".into(),
+                workspace_id: "w1".into(),
+                tab_id: "w1:t1".into(),
+                cwd: None,
+                foreground_cwd: None,
+                agent_session: None,
+                terminal_id: None,
+                agent: None,
+            },
+        };
+        db.next_with_identity("owner", Some(&link), None, &identity::Identity::default())
+            .unwrap();
+        db.message(task.id, "Keep message", Some("owner")).unwrap();
+        match state {
+            "new" => {
+                db.force_reopen(task.id, "operator").unwrap();
+            }
+            "completed" | "archived" => {
+                db.force_complete(task.id, "operator").unwrap();
+            }
+            "error" => {
+                db.force_error(task.id, "operator", "Keep reason").unwrap();
+            }
+            "blocked" => {
+                db.force_blocked(task.id, "operator", "Keep question")
+                    .unwrap();
+            }
+            _ => {}
+        }
+        if state == "archived" {
+            db.set_archived(task.id, true, "operator").unwrap();
+        }
+        let before = db.show(task.id).unwrap();
+        db.clear_assignment(task.id).unwrap();
+        let after = db.show(task.id).unwrap();
+        let assignment = [
+            "harness_name",
+            "harness_session",
+            "orchestrator_name",
+            "orchestrator_session",
+        ];
+        for field in assignment {
+            assert!(before["task"][field].is_string());
+            assert!(after["task"][field].is_null());
+        }
+        for (field, value) in before["task"].as_object().unwrap() {
+            if !assignment.contains(&field.as_str()) && field != "updated_at" {
+                assert_eq!(&after["task"][field], value);
+            }
+        }
+        for field in ["herdr", "images", "messages", "events"] {
+            assert_eq!(after[field], before[field]);
+        }
+        assert!(after["herdr"].is_object());
+        assert_eq!(
+            db.owned_with_name("owner", None).unwrap().is_some(),
+            state == "in_progress"
+        );
+        assert!(db.clear_assignment(999).is_err());
+    }
+}
+
+#[test]
 fn force_blocked_preserves_assignment_and_records_operator_reason_atomically() {
     let (mut db, _dir) = database();
     let task = db.add("Foreign task", None, &[]).unwrap();

@@ -784,6 +784,7 @@ fn execute(
                             ..Default::default()
                         },
                     ),
+                    tui::TaskAction::ClearAssignment(id) => db.clear_assignment(id),
                     tui::TaskAction::Priority(id, priority) => {
                         db.edit_with_priority(id, None, None, &[], None, Some(priority))
                     }

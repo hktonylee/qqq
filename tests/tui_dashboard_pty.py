@@ -253,6 +253,12 @@ print(json.dumps({"result": {"pane": pane}}))
             "--orchestrator-name", "herdr", "--orchestrator-session", "w1:p1")
         if scenario.endswith("no_color"):
             env["NO_COLOR"] = "1"
+    if scenario.startswith("clear_assignment"):
+        cli("next", "--session", "owner", "--filter", "id == 2",
+            "--harness-name", "codex", "--harness-session", "assigned-worker",
+            "--orchestrator-name", "herdr", "--orchestrator-session", "w1:p1")
+        if scenario.endswith("no_color"):
+            env["NO_COLOR"] = "1"
     if scenario in ("scroll", "wheel", "live_refresh_scroll", "ctrl_c_new_scroll") or scenario.startswith("scroll_multiline"):
         for index in range(3, 21):
             description = ("\n".join(f"Line{line:02}" for line in range(1, 16))
@@ -3124,6 +3130,43 @@ print(json.dumps({"result": result}))
                 send(b"\x13")
                 wait_visible(lambda: visible.text().splitlines()[-1].startswith("Saved #2"))
                 assert cli("show", "2")["task"]["description"] == "ChangedSecond"
+        elif scenario.startswith("clear_assignment"):
+            send(b"\x0b2\r")
+            wait_frame(lambda: "Task #2 (In progress)" in editor_title())
+            initial = cli("show", "2")
+            send(b"\x01Unsaved ")
+            wait_visible(lambda: editor_line().startswith("Unsaved Second"))
+            if scenario.endswith("narrow"):
+                fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 12, 32, 0, 0))
+                visible.resize(32, 12)
+                wait_visible(lambda: editor_line().startswith("Unsaved Second"))
+
+            def clear_assignment_prompt():
+                send(b"\x07")
+                wait_visible(lambda: "u Clear assignment" in visible.text())
+                send(b"\x1b[B" * 4 + b"\r" if scenario.endswith("arrows") else b"u")
+                wait_visible(lambda: "Clear assignment task #2?" in visible.text())
+
+            clear_assignment_prompt()
+            assert cli("show", "2") == initial
+            send(b"n")
+            wait_visible(lambda: "Clear assignment task" not in visible.text()
+                         and editor_line().startswith("Unsaved Second"))
+            assert cli("show", "2") == initial
+            clear_assignment_prompt()
+            send(b"y")
+            wait_visible(lambda: "Assignment cleared #2" in visible.text()
+                         and editor_line().startswith("Second"))
+            after = cli("show", "2")
+            assignment = ("harness_name", "harness_session", "orchestrator_name", "orchestrator_session")
+            assert all(after["task"][field] is None for field in assignment)
+            for field, value in initial["task"].items():
+                if field not in (*assignment, "updated_at"):
+                    assert after["task"][field] == value
+            for field in ("herdr", "messages", "events", "images"):
+                assert after[field] == initial[field]
+            if scenario.endswith("no_color"):
+                assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen
         elif scenario.startswith("blocked"):
             initial = cli("show", "2")
             send(b"\x0b2\r")
@@ -3860,21 +3903,21 @@ print(json.dumps({"result": result}))
                        and visible.text().splitlines()[-1].startswith("Ctrl-S Save  Ctrl-H Herdr"))
             before_popup = visible.text().splitlines()
             send(b"\x07")
-            wait_caret(lambda: visible.text().splitlines()[6][12] == "┌"
-                       and "Task actions #2" in visible.text().splitlines()[7]
-                       and visible.text().splitlines()[17][59] == "┘", (13, 8))
+            wait_caret(lambda: visible.text().splitlines()[5][12] == "┌"
+                       and "Task actions #2" in visible.text().splitlines()[6]
+                       and visible.text().splitlines()[17][59] == "┘", (13, 7))
             popup_rows = visible.text().splitlines()
-            menu_labels = ["c Complete", "e Mark error", "o Reopen", "p Priority",
+            menu_labels = ["c Complete", "e Mark error", "o Reopen", "u Clear assignment", "p Priority",
                            "d Set parent", "a Archive"]
             menu_rows = [next(row for row, text in enumerate(popup_rows) if label in text)
                          for label in menu_labels]
             assert menu_rows == sorted(menu_rows), popup_rows
-            for group_before, group_after in ((2, 3), (4, 5)):
+            for group_before, group_after in ((2, 3), (5, 6)):
                 assert menu_rows[group_after] == menu_rows[group_before] + 2, popup_rows
                 assert not popup_rows[menu_rows[group_before] + 1][13:59].strip(), popup_rows
             for row in range(24):
                 for column in range(72):
-                    if not (6 <= row < 18 and 12 <= column < 60):
+                    if not (5 <= row < 18 and 12 <= column < 60):
                         assert popup_rows[row][column] == before_popup[row][column], (row, column)
             send(b"\x1b[<0;6;4M\x1b[<0;6;4m\x10")
             settle()
@@ -3883,9 +3926,9 @@ print(json.dumps({"result": result}))
             fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 30, 90, 0, 0))
             visible.resize(90, 30)
             os.kill(child.pid, signal.SIGWINCH)
-            wait_caret(lambda: visible.text().splitlines()[9][21] == "┌"
-                       and "Task actions #2" in visible.text().splitlines()[10]
-                       and visible.text().splitlines()[20][68] == "┘", (22, 11))
+            wait_caret(lambda: visible.text().splitlines()[8][21] == "┌"
+                       and "Task actions #2" in visible.text().splitlines()[9]
+                       and visible.text().splitlines()[20][68] == "┘", (22, 10))
             settle()
             send(b"p")
             wait_caret(lambda: "Priority task #2" in visible.text(), (22, 15))
@@ -4241,7 +4284,7 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: selected_action("a"))
             send(b"\x1b[B")
             wait_visible(lambda: selected_action("o"))
-            for key in "pdao":
+            for key in "updao":
                 send(b"\x1b[B")
                 wait_visible(lambda key=key: selected_action(key))
             send(b"\r")
@@ -4251,21 +4294,21 @@ print(json.dumps({"result": result}))
             assert cli("show", "1") == initial_detail
             if scenario == "completed_menu_live":
                 open_menu()
-                send(b"\x1b[B")
+                send(b"\x1b[B" * 2)
                 wait_visible(lambda: selected_action("p"))
                 cli("edit", "--reopen", "1")
                 wait_visible(lambda: "c Complete" in visible.text()
                              and "e Mark error" in visible.text() and selected_action("p"))
-                send(b"\x1b[A" * 2)
+                send(b"\x1b[A" * 3)
                 wait_visible(lambda: selected_action("e"))
                 assert cli("next", "--local", "--session", "external")["id"] == 1
                 cli("edit", "--complete", "1", "--session", "external")
                 wait_visible(lambda: "c Complete" not in visible.text()
-                             and "e Mark error" not in visible.text() and selected_action("p"))
+                             and "e Mark error" not in visible.text() and selected_action("u"))
                 for key in (b"c", b"e"):
                     send(key)
                     settle()
-                    assert selected_action("p"), visible.text()
+                    assert selected_action("u"), visible.text()
             close_menu()
             assert cli("show", "1")["task"]["description"] == "Done"
             if scenario.endswith("no_color"):
@@ -4465,7 +4508,7 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: selected_action("a"))
             send(b"\x1b[B")
             wait_visible(lambda: selected_action("c"))
-            for key in "eopd":
+            for key in "eoupd":
                 send(b"\x1b[B")
                 wait_visible(lambda key=key: selected_action(key))
             assert cli("list") == initial_tasks
@@ -4474,6 +4517,7 @@ print(json.dumps({"result": result}))
             close_menu()
             for index, (key, prompt) in enumerate([
                 ("c", "Complete task"), ("e", "Error task"), ("o", "Reopen task"),
+                ("u", "Clear assignment task"),
                 ("p", "Priority task"), ("d", "Parent task"), ("a", "Archive task"),
             ]):
                 open_menu()
@@ -4913,7 +4957,7 @@ print(json.dumps({"result": result}))
             send(b"\x07")
             wait_visible(lambda: "c Complete" in visible.text() and
                          "b Mark blo" in visible.text() and "Up/Dn Enter" in visible.text())
-            send(b"\x1b[B" * 5)
+            send(b"\x1b[B" * 6)
             wait_visible(lambda: "> d Set par" in visible.text() and "Up/Dn Enter" in visible.text())
             send(b"p")
             wait_visible(lambda: "Enter -100" in visible.text())

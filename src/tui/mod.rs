@@ -152,6 +152,7 @@ pub enum TaskAction {
     SetArchived(i64, bool),
     Priority(i64, i64),
     Tags(i64, Vec<String>),
+    ClearAssignment(i64),
     Parent(i64, crate::db::ParentChange),
 }
 
@@ -182,6 +183,7 @@ impl TaskAction {
             | Self::ForceReopen(id)
             | Self::SetArchived(id, _)
             | Self::Tags(id, _)
+            | Self::ClearAssignment(id)
             | Self::Priority(id, _)
             | Self::Parent(id, _) => *id,
         }
@@ -201,6 +203,7 @@ impl TaskAction {
             Self::SetArchived(_, false) => "Unarchive",
             Self::Priority(_, _) => "Set priority",
             Self::Tags(..) => "Set tags",
+            Self::ClearAssignment(_) => "Clear assignment",
             Self::Parent(_, _) => "Set parent",
         }
     }
@@ -215,6 +218,7 @@ impl TaskAction {
             Self::SetArchived(id, true) => format!("Archived #{id}"),
             Self::SetArchived(id, false) => format!("Unarchived #{id}"),
             Self::Tags(id, _) => format!("Tags saved #{id}"),
+            Self::ClearAssignment(id) => format!("Assignment cleared #{id}"),
             Self::Priority(id, priority) => format!("Priority #{id}: {priority}"),
             Self::Parent(id, crate::db::ParentChange::Set(parent)) => {
                 format!("Parent #{id}: #{parent}")
@@ -241,7 +245,11 @@ const ACTION_MENU_GROUPS: [&[(char, &str)]; 3] = [
         ('r', "Retry"),
         ('o', "Reopen"),
     ],
-    &[('p', "Priority"), ('d', "Set parent")],
+    &[
+        ('u', "Clear assignment"),
+        ('p', "Priority"),
+        ('d', "Set parent"),
+    ],
     &[('a', "Archive")],
 ];
 
@@ -2348,6 +2356,7 @@ fn compose_inner(
                                 },
                                 KeyCode::Char('r') => Some(TaskAction::Retry(id)),
                                 KeyCode::Char('o') => Some(TaskAction::Reopen(id)),
+                                KeyCode::Char('u') => Some(TaskAction::ClearAssignment(id)),
                                 KeyCode::Char('a') => Some(TaskAction::SetArchived(id, !archived)),
                                 KeyCode::Char('p') => {
                                     action_ui = Some(ActionUi::Input {
@@ -3270,6 +3279,7 @@ mod tests {
                 });
                 expected.extend([
                     "",
+                    "u Clear assignment",
                     "p Priority",
                     "d Set parent",
                     "",

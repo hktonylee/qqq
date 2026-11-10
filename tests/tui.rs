@@ -897,6 +897,18 @@ fn tui_dashboard_force_completion_keys_handle_initial_herdr_failure_and_ignore_m
 }
 
 #[test]
+fn tui_dashboard_clear_assignment_requires_confirmation_and_preserves_task() {
+    for name in [
+        "clear_assignment",
+        "clear_assignment_no_color",
+        "clear_assignment_narrow",
+        "clear_assignment_arrows",
+    ] {
+        dashboard_scenario(name);
+    }
+}
+
+#[test]
 fn tui_dashboard_task_actions() {
     dashboard_scenario("actions_basic");
     dashboard_scenario("actions_rejected");

@@ -578,6 +578,7 @@ Ctrl-G's task menu supports arrows/Enter or letter shortcuts:
 | `b` | Mark an in-progress task Blocked with the information or help needed |
 | `r` | Return an Error or Blocked task to New |
 | `o` | Reopen a non-error task |
+| `u` | Clear harness and orchestrator assignment fields after confirmation |
 | `p` | Set priority (-100..100) |
 | `d` | Set parent to a positive ID or `none` |
 | `a` | Archive/unarchive |
@@ -585,6 +586,9 @@ Ctrl-G's task menu supports arrows/Enter or letter shortcuts:
 Menus skip unavailable actions and refresh availability after status changes.
 Status changes require confirmation; priority/parent changes ask when the draft
 is dirty. Rejected actions keep the draft and display the error.
+
+Clear assignment also requires confirmation. It preserves task status, active
+ownership, content, history, and the saved Herdr link.
 
 Both `y` and `Y` confirm the action and bypass ownership checks:
 

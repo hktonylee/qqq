@@ -241,8 +241,8 @@ Offline font fallbacks: Georgia, system UI sans, and system monospace. No remote
 <details><summary>Keys, guards &amp; failure paths</summary>
 <ul>
 <li>Ctrl+G selects the bulk menu whenever any bulk selection exists, even if a single task is focused.</li>
-<li>Menu Up/Down wraps; Enter activates highlighted item. c=Complete (unless completed), e=Mark error (unless completed/error), r=Retry (error only), o=Reopen (unless error), p=Priority, d=Parent, a=Archive/Unarchive. Menu visibility is not DB validity: New offers Reopen but execution may reject it.</li>
-<li>r/o/a/c always go to action confirmation, even with a clean draft. Completion does not discover or check the owner.</li>
+<li>Menu Up/Down wraps; Enter activates highlighted item. c=Complete (unless completed), e=Mark error (unless completed/error), r=Retry (error only), o=Reopen (unless error), u=Clear assignment, p=Priority, d=Parent, a=Archive/Unarchive. Menu visibility is not DB validity: New offers Reopen but execution may reject it.</li>
+<li>r/o/a/c/u always go to action confirmation, even with a clean draft. Completion does not discover or check the owner.</li>
 <li>p/d open scalar input. Enter validates priority -100..100, or parent ID/none. Validation errors remain inline. Valid input with a clean draft executes directly; a dirty draft goes to confirmation.</li>
 <li>e opens error reason. Enter requires nonblank reason, then always confirms.</li>
 <li>Escape closes the menu or priority/parent/error-reason input directly to the editor, dropping entered values. Inputs do not return to the menu. The earlier filter-clear guard can consume the first Escape; q/Q remains literal text in inputs.</li>
