@@ -18,12 +18,10 @@ Queue diagnostics also use “blocked” for a `new` task that is not ready beca
 of unfinished dependencies. That diagnostic does not change the task's
 persisted status.
 
-## Why Reopen appears on a New task
+## Reopen availability
 
-The current Ctrl-G menu hides Reopen for `error` and `blocked`, but also shows it
-for `new`. That visibility rule is broader than the valid transition: a New task
-cannot reopen. Confirming it with either `y` or `Y` opens an action error and
-leaves the task unchanged. This is a menu availability mismatch.
+The Ctrl-G menu offers Reopen for `in_progress` and `completed`. It hides the
+entry and ignores its `o` shortcut for `new`, `error` and `blocked`.
 
 Use `qqq next` to claim a ready New task. Reopen returns previously started or
 finished work to New; it does not start work or act as a New-to-New no-op.
@@ -90,12 +88,12 @@ an Error, Blocked or Completed task; return or reopen that task to New first.
 ## Ctrl-G action matrix
 
 This table describes the menu for the task's current status. `Hidden` means no
-menu entry. `Shown, rejects` describes the New/Reopen mismatch above. Both `y`
-and `Y` confirm the same forced action, with no owner or Herdr lookup.
+menu entry. Both `y` and `Y` confirm the same forced action, with no owner or
+Herdr lookup.
 
 | Current status | Complete (`c`) | Mark error (`e`) | Mark blocked (`b`) | Retry (`r`) | Reopen (`o`) |
 | --- | --- | --- | --- | --- | --- |
-| `new` | `completed` | `error` | Hidden | Hidden | Shown, rejects |
+| `new` | `completed` | `error` | Hidden | Hidden | Hidden |
 | `in_progress` | `completed` | `error` | `blocked` | Hidden | `new` |
 | `completed` | Hidden | Hidden | Hidden | Hidden | `new` |
 | `error` | `completed` | Hidden | Hidden | `new` | Hidden |
@@ -113,7 +111,7 @@ fields after confirmation; it does not change status, active ownership or the li
 | New → Completed or Error | Ctrl-G permits manual completion/error without first claiming the task. Completion does not require dependencies to be ready. Normal CLI completion/error rejects New. |
 | Error or Blocked → Completed | Ctrl-G Complete permits it; CLI `--complete` rejects it. |
 | New → Blocked | Rejected by the CLI; Mark blocked is hidden in the TUI. A task must be in progress before it can be marked blocked. |
-| New → New through Reopen or return-to-New | Rejected, including with `--force`. The visible TUI Reopen entry does not change this. |
+| New → New through Reopen or return-to-New | Rejected, including with `--force`. TUI Reopen is hidden. |
 | Completed → New through return/retry | CLI `--set-status new`, even with `--force`, rejects it. Use Reopen. TUI Retry is hidden. |
 | Repeating completion, error or blocked reporting in the same state | Rejected. These lifecycle actions are not idempotent no-ops; unavailable TUI entries are hidden. |
 | Forcing a live active task to New | TUI Reopen permits it. CLI normal reopen requires an absent owner; CLI `--set-status new --force` bypasses ownership. |

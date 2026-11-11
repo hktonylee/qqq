@@ -376,7 +376,7 @@ New tasks cannot reopen. Archived tasks require unarchive first or in the same
 edit. Archived unfinished dependencies must be completed, unarchived or unlinked.
 Completed descendants stay completed; new dependents wait for the reopened task.
 
-Ctrl-G currently still lists Reopen on a New task; confirmation rejects it. See
+Ctrl-G hides Reopen on New tasks and ignores its `o` shortcut. See
 the [state-transition matrices](task-state-transitions.md) for menu availability,
 forced actions, invalid same-state requests and concurrent status changes.
 
@@ -582,7 +582,7 @@ Ctrl-G's task menu supports arrows/Enter or letter shortcuts:
 | `e` | Mark error with a nonblank reason; hidden on Error/Blocked/completed tasks |
 | `b` | Mark an in-progress task Blocked with the information or help needed |
 | `r` | Return an Error or Blocked task to New |
-| `o` | Reopen a non-error task |
+| `o` | Reopen an in-progress or completed task |
 | `u` | Clear harness and orchestrator assignment fields after confirmation |
 | `p` | Set priority (-100..100) |
 | `d` | Set parent to a positive ID or `none` |

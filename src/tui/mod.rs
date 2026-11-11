@@ -259,7 +259,7 @@ fn action_menu_available(key: char, status: &str) -> bool {
         'e' => !matches!(status, "completed" | "error" | "blocked"),
         'b' => status == "in_progress",
         'r' => matches!(status, "error" | "blocked"),
-        'o' => !matches!(status, "error" | "blocked"),
+        'o' => !matches!(status, "new" | "error" | "blocked"),
         _ => true,
     }
 }
@@ -3272,11 +3272,11 @@ mod tests {
                 if status == "in_progress" {
                     expected.push("b Mark blocked");
                 }
-                expected.push(if matches!(status, "error" | "blocked") {
-                    "r Retry"
-                } else {
-                    "o Reopen"
-                });
+                if matches!(status, "error" | "blocked") {
+                    expected.push("r Retry");
+                } else if status != "new" {
+                    expected.push("o Reopen");
+                }
                 expected.extend([
                     "",
                     "u Clear assignment",

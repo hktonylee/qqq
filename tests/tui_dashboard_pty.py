@@ -3903,21 +3903,21 @@ print(json.dumps({"result": result}))
                        and visible.text().splitlines()[-1].startswith("Ctrl-S Save  Ctrl-H Herdr"))
             before_popup = visible.text().splitlines()
             send(b"\x07")
-            wait_caret(lambda: visible.text().splitlines()[5][12] == "┌"
-                       and "Task actions #2" in visible.text().splitlines()[6]
-                       and visible.text().splitlines()[17][59] == "┘", (13, 7))
+            wait_caret(lambda: visible.text().splitlines()[6][12] == "┌"
+                       and "Task actions #2" in visible.text().splitlines()[7]
+                       and visible.text().splitlines()[17][59] == "┘", (13, 8))
             popup_rows = visible.text().splitlines()
-            menu_labels = ["c Complete", "e Mark error", "o Reopen", "u Clear assignment", "p Priority",
+            menu_labels = ["c Complete", "e Mark error", "u Clear assignment", "p Priority",
                            "d Set parent", "a Archive"]
             menu_rows = [next(row for row, text in enumerate(popup_rows) if label in text)
                          for label in menu_labels]
             assert menu_rows == sorted(menu_rows), popup_rows
-            for group_before, group_after in ((2, 3), (5, 6)):
+            for group_before, group_after in ((1, 2), (4, 5)):
                 assert menu_rows[group_after] == menu_rows[group_before] + 2, popup_rows
                 assert not popup_rows[menu_rows[group_before] + 1][13:59].strip(), popup_rows
             for row in range(24):
                 for column in range(72):
-                    if not (5 <= row < 18 and 12 <= column < 60):
+                    if not (6 <= row < 18 and 12 <= column < 60):
                         assert popup_rows[row][column] == before_popup[row][column], (row, column)
             send(b"\x1b[<0;6;4M\x1b[<0;6;4m\x10")
             settle()
@@ -3926,9 +3926,9 @@ print(json.dumps({"result": result}))
             fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 30, 90, 0, 0))
             visible.resize(90, 30)
             os.kill(child.pid, signal.SIGWINCH)
-            wait_caret(lambda: visible.text().splitlines()[8][21] == "┌"
-                       and "Task actions #2" in visible.text().splitlines()[9]
-                       and visible.text().splitlines()[20][68] == "┘", (22, 10))
+            wait_caret(lambda: visible.text().splitlines()[9][21] == "┌"
+                       and "Task actions #2" in visible.text().splitlines()[10]
+                       and visible.text().splitlines()[20][68] == "┘", (22, 11))
             settle()
             send(b"p")
             wait_caret(lambda: "Priority task #2" in visible.text(), (22, 15))
@@ -4299,7 +4299,7 @@ print(json.dumps({"result": result}))
                 cli("edit", "--reopen", "1")
                 wait_visible(lambda: "c Complete" in visible.text()
                              and "e Mark error" in visible.text() and selected_action("p"))
-                send(b"\x1b[A" * 3)
+                send(b"\x1b[A" * 2)
                 wait_visible(lambda: selected_action("e"))
                 assert cli("next", "--local", "--session", "external")["id"] == 1
                 cli("edit", "--complete", "1", "--session", "external")
@@ -4345,15 +4345,16 @@ print(json.dumps({"result": result}))
             open_menu()
             settle()
             assert ("r Retry" in visible.text()) == (status == "error"), visible.text()
-            assert ("o Reopen" in visible.text()) == (status != "error"), visible.text()
+            assert ("o Reopen" in visible.text()) == (status in ("in_progress", "completed")), visible.text()
             assert ("e Mark error" in visible.text()) == (status in ("new", "in_progress")), visible.text()
             if scenario == "menu_retry_live":
                 send(b"\x1b[B")
                 wait_visible(lambda: selected_action("r"))
                 cli("edit", str(task_id), "--set-status", "new")
                 wait_visible(lambda: "r Retry" not in visible.text()
+                             and "o Reopen" not in visible.text()
                              and "e Mark error" in visible.text() and selected_action("e"))
-                send(b"r")
+                send(b"ro")
                 settle()
                 assert f"Task actions #{task_id}" in visible.text(), visible.text()
                 assert selected_action("e"), visible.text()
@@ -4369,10 +4370,11 @@ print(json.dumps({"result": result}))
                 assert selected_action("r"), visible.text()
                 assert cli("show", str(task_id)) == error_detail
             elif status != "error":
-                send(b"r")
+                send(b"ro" if status == "new" else b"r")
                 settle()
                 assert f"Task actions #{task_id}" in visible.text(), visible.text()
                 assert "Retry task" not in visible.text(), visible.text()
+                assert "Reopen task" not in visible.text(), visible.text()
                 assert selected_action("o" if status == "completed" else "c"), visible.text()
                 if status != "completed":
                     send(b"\x1b[B" * (3 if status == "in_progress" else 2))
@@ -4392,11 +4394,15 @@ print(json.dumps({"result": result}))
                 send(b"\x1b[B")
                 wait_visible(lambda: selected_action("c"))
                 send(b"\x1b[B")
-            wait_visible(lambda: selected_action("r" if status == "error" else "o"))
+            action_key, action_label = {
+                "new": ("u", "Clear assignment"),
+                "error": ("r", "Retry"),
+            }.get(status, ("o", "Reopen"))
+            wait_visible(lambda: selected_action(action_key))
             if scenario != "menu_retry_live":
                 assert cli("list") == initial_tasks
             send(b"\r")
-            wait_visible(lambda: f"{'Retry' if status == 'error' else 'Reopen'} task #{task_id}?" in visible.text())
+            wait_visible(lambda: f"{action_label} task #{task_id}?" in visible.text())
             send(b"y" if status == "error" else b"n")
             wait_visible(lambda: f"Task #{task_id} (" in editor_title()
                          and editor_line().startswith(label)
@@ -4408,8 +4414,9 @@ print(json.dumps({"result": result}))
                 open_menu()
                 settle()
                 assert "r Retry" not in visible.text(), visible.text()
+                assert "o Reopen" not in visible.text(), visible.text()
                 send(b"\x1b[B" * 2)
-                wait_visible(lambda: selected_action("o"))
+                wait_visible(lambda: selected_action("u"))
                 send(b"\x1b")
                 wait_visible(lambda: "Task actions" not in visible.text()
                              and editor_line().startswith(label) and visible.cursor_visible)
@@ -4508,7 +4515,7 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: selected_action("a"))
             send(b"\x1b[B")
             wait_visible(lambda: selected_action("c"))
-            for key in "eoupd":
+            for key in "eupd":
                 send(b"\x1b[B")
                 wait_visible(lambda key=key: selected_action(key))
             assert cli("list") == initial_tasks
@@ -4516,7 +4523,7 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: prompt_visible("Parent task"))
             close_menu()
             for index, (key, prompt) in enumerate([
-                ("c", "Complete task"), ("e", "Error task"), ("o", "Reopen task"),
+                ("c", "Complete task"), ("e", "Error task"),
                 ("u", "Clear assignment task"),
                 ("p", "Priority task"), ("d", "Parent task"), ("a", "Archive task"),
             ]):
@@ -4733,8 +4740,7 @@ print(json.dumps({"result": result}))
             def action(letter, prompt):
                 clear_capture()
                 send(b"\x07")
-                status_action = "r Retry" if letter == "r" else "o Reopen"
-                wait_visible(lambda: "Task actions" in visible.text() and status_action in visible.text())
+                wait_visible(lambda: "Task actions" in visible.text() and "u Clear assignment" in visible.text())
                 clear_capture()
                 send(letter.encode())
                 read_until(prompt.encode())
@@ -4903,8 +4909,6 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: "Owned item" in visible.text() and "Hidden item" in visible.text())
             rejected_action("Owned item", 1, "a", "Archive task #1?",
                             "Task 1 is in progress and cannot be archived")
-            rejected_action("Fresh item", 4, "o", "Reopen task #4?",
-                            "Task 4 must be completed, in progress or error to force reopen")
             rejected_action("Failed item", 2, "r", "Retry task #2?",
                             "Task 2 is no longer in error",
                             lambda: cli("edit", "2", "--set-status", "new"))
