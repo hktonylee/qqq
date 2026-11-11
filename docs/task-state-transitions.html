@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="qqq task lifecycle: valid CLI and Ctrl-G transitions, ownership rules, rejected actions, and unusual state changes.">
+<title>Task lifecycle · qqq</title>
+<!-- Standalone reference. Source: task-state-transitions.md at b9d946f. All content inline; no network requests. -->
+<style>
+:root {
+  color-scheme: dark;
+  --bg: oklch(0.175 0.008 220);
+  --surface: oklch(0.21 0.01 220);
+  --raised: oklch(0.25 0.012 220);
+  --ink: oklch(0.94 0.006 220);
+  --muted: oklch(0.75 0.014 220);
+  --soft: oklch(0.7 0.016 220);
+  --rule: oklch(0.34 0.015 220);
+  --line-strong: oklch(0.57 0.023 220);
+  --accent: oklch(0.83 0.11 222);
+  --accent-tint: oklch(0.265 0.038 222);
+  --error: oklch(0.8 0.09 22);
+  --warning: oklch(0.84 0.105 83);
+  --sans: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Geist Mono", "SFMono-Regular", Consolas, monospace;
+  --z-nav: 10;
+}
+* { box-sizing: border-box; }
+html { scroll-padding-top: 100px; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.75 var(--sans); -webkit-font-smoothing: antialiased; }
+::selection { background: var(--accent); color: var(--bg); }
+a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 4px; }
+a:hover { color: var(--ink); }
+a:focus-visible, summary:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: 5px; }
+p { max-width: 73ch; margin: 0 0 20px; color: var(--muted); text-wrap: pretty; }
+p:last-child { margin-bottom: 0; }
+h1,h2,h3 { color: var(--ink); line-height: 1.2; text-wrap: balance; }
+h1 { font-size: 4.5rem; font-weight: 550; letter-spacing: -.035em; margin: 0 0 28px; }
+h2 { font-size: 1.875rem; font-weight: 550; letter-spacing: -.025em; margin: 0 0 24px; }
+code { font: .86em/1.5 var(--mono); color: var(--ink); overflow-wrap: anywhere; }
+p code, li code { background: var(--surface); padding: .15em .35em; border-radius: 3px; }
+code[data-state="in_progress"] { color: var(--accent); }
+code[data-state="error"] { color: var(--error); }
+code[data-state="blocked"] { color: var(--warning); }
+kbd { display: inline-block; font: .8em var(--mono); padding: 3px 6px; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); }
+.frame { width: min(1360px, calc(100% - 96px)); margin-inline: auto; }
+.topbar { display: flex; align-items: center; justify-content: space-between; padding-block: 28px; border-bottom: 1px solid var(--rule); gap: 24px; }
+.wordmark { color: var(--ink); font: 650 25px/1 var(--mono); letter-spacing: -.04em; text-decoration: none; }
+.top-links { display: flex; gap: 28px; align-items: center; font-size: 13px; }
+.top-links a { color: var(--muted); text-decoration: none; }
+.top-links a:hover { color: var(--accent); }
+.hero { padding-block: 76px 64px; display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 64px; align-items: end; }
+.hero p { font-size: 18px; line-height: 1.7; max-width: 64ch; }
+.hero-meta { border-top: 1px solid var(--rule); padding-top: 18px; font: 12px/1.9 var(--mono); color: var(--soft); }
+.hero-meta strong { display: block; font: 500 14px/1.8 var(--sans); color: var(--ink); margin-bottom: 4px; }
+.document { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 72px; align-items: start; }
+.contents { position: sticky; top: 32px; padding: 4px 0 40px; font-size: 13px; }
+.contents a { display: block; color: var(--muted); text-decoration: none; padding: 8px 0; line-height: 1.5; }
+.contents a:hover { color: var(--accent); }
+.contents a:first-child { color: var(--ink); }
+.contents .nav-rule { height: 1px; background: var(--rule); margin-block: 18px; width: 28px; }
+article { min-width: 0; }
+section { padding: 52px 0 60px; border-top: 1px solid var(--rule); scroll-margin-top: 24px; }
+section:first-child { padding-top: 0; border-top: 0; }
+.section-head { display: flex; align-items: baseline; gap: 20px; justify-content: space-between; margin-bottom: 26px; }
+.section-head h2 { margin: 0; }
+.section-link { color: var(--soft); text-decoration: none; font-size: 16px; flex: 0 0 auto; }
+.section-link:hover { color: var(--accent); }
+.lifecycle-figure { margin: 0 0 28px; }
+.scroll-hint { display: none; }
+.map-scroll { overflow-x: auto; overscroll-behavior-x: contain; }
+.lifecycle-figure svg { width: 100%; min-width: 740px; height: auto; display: block; }
+.connectors .return-path { stroke-dasharray: 5 5; }
+.edge-labels rect { fill: var(--bg); }
+.edge-labels text { fill: var(--muted); font: 12px var(--mono); }
+.state-node rect { fill: var(--surface); stroke: var(--rule); stroke-width: 1.5; }
+.state-node.focal rect { fill: var(--accent-tint); stroke: var(--accent); }
+.state-name { font: 550 20px var(--sans); fill: var(--ink); }
+.state-note { font: 12px var(--sans); fill: var(--muted); }
+.focal .state-name { fill: var(--accent); }
+.completed-node rect { fill: var(--raised); stroke: var(--line-strong); }
+figcaption { display: flex; gap: 24px; flex-wrap: wrap; align-items: center; padding-top: 12px; font-size: 12px; color: var(--soft); }
+figcaption > span { display: inline-flex; align-items: center; gap: 8px; }
+.legend-line { width: 24px; border-top: 1px solid var(--line-strong); }
+.legend-line.dashed { border-top-style: dashed; }
+.map-note { margin-left: auto; }
+.diagram-source { margin: 24px 0 36px; font-size: 13px; }
+summary { color: var(--muted); cursor: pointer; width: fit-content; padding: 6px 0; }
+summary:hover { color: var(--accent); }
+pre { overflow-x: auto; padding: 20px; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); line-height: 1.6; }
+pre code { overflow-wrap: normal; }
+.table-scroll { overflow-x: auto; overscroll-behavior-x: contain; margin: 28px 0 32px; }
+.table-scroll:last-child { margin-bottom: 0; }
+table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; line-height: 1.6; }
+caption { text-align: left; }
+th, td { padding: 18px 16px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+thead th { padding-block: 14px; color: var(--soft); font-size: 12px; font-weight: 500; white-space: nowrap; }
+tbody th { font-weight: 500; color: var(--ink); }
+tbody td { color: var(--muted); }
+th:first-child,td:first-child { padding-left: 0; }
+th:last-child,td:last-child { padding-right: 0; }
+tbody tr { transition: background-color 160ms ease-out; }
+tbody tr:hover { background: var(--surface); }
+tbody tr:last-child th,tbody tr:last-child td { border-bottom: 0; }
+#normal-lifecycle table { min-width: 720px; }
+#normal-lifecycle th:first-child { min-width: 190px; }
+#normal-lifecycle td:nth-child(2) { min-width: 215px; }
+#persisted-states th { width: 160px; }
+#persisted-states tbody code { font-size: 13px; }
+#cli-action-matrix table,#ctrl-g-action-matrix table { min-width: 850px; }
+#cli-action-matrix th:first-child,#ctrl-g-action-matrix th:first-child { width: 138px; }
+#cli-action-matrix tbody td,#ctrl-g-action-matrix tbody td { font-size: 13px; }
+#cli-action-matrix td code,#ctrl-g-action-matrix td code { white-space: nowrap; }
+#cli-action-matrix thead th code { color: var(--muted); font-size: 11px; }
+#unusual-and-rejected-transitions tbody th { width: 35%; padding-right: 28px; }
+#unusual-and-rejected-transitions table { min-width: 540px; }
+.mismatch { border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); margin-block: 0 60px; padding: 32px 36px; }
+.mismatch .section-head { margin-bottom: 18px; }
+.mismatch h2 { font-size: 22px; }
+.mismatch p { font-size: 15px; max-width: 80ch; }
+.mismatch p code { background: var(--raised); }
+.mismatch .section-link { color: var(--warning); }
+.rules { list-style: none; margin: 0; padding: 0; }
+.rules li { display: grid; grid-template-columns: 12px 1fr; gap: 18px; padding: 20px 0; border-bottom: 1px solid var(--rule); color: var(--muted); max-width: 80ch; }
+.rules li::before { content: "↗"; color: var(--accent); font: 16px var(--sans); }
+.rules li:last-child { border-bottom: 0; }
+footer { margin-top: 48px; border-top: 1px solid var(--rule); padding: 28px 0 40px; display: flex; justify-content: space-between; gap: 24px; color: var(--soft); font-size: 12px; }
+footer p { font-size: 12px; margin: 0; }
+footer a { color: var(--muted); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.skip { position: fixed; top: 12px; left: 12px; transform: translateY(-200%); padding: 10px 16px; z-index: var(--z-nav); background: var(--accent); color: var(--bg); border-radius: 4px; }
+.skip:focus { transform: none; }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+@media (max-width: 1100px) {
+  .frame { width: calc(100% - 56px); }
+  .document { grid-template-columns: 150px minmax(0,1fr); gap: 40px; }
+  .hero { grid-template-columns: minmax(0,1fr); gap: 28px; }
+  .hero-meta { max-width: 480px; }
+  .hero-meta strong { display: inline; margin-right: 16px; }
+  .hero-meta br { display: none; }
+  h1 { font-size: 4rem; }
+}
+@media (max-width: 760px) {
+  html { scroll-padding-top: 24px; }
+  .frame { width: calc(100% - 40px); }
+  .topbar { padding-block: 22px; }
+  .top-links { gap: 18px; font-size: 12px; }
+  .hero { padding-block: 48px 36px; }
+  h1 { font-size: 3rem; letter-spacing: -.03em; margin-bottom: 22px; }
+  .hero p { font-size: 16px; }
+  .hero-meta { font-size: 11px; }
+  .hero-meta strong { display: block; font-size: 13px; }
+  .document { display: block; }
+  .contents { position: static; display: flex; gap: 22px; overflow-x: auto; padding: 0 0 24px; margin-bottom: 18px; border-bottom: 1px solid var(--rule); }
+  .contents a { flex: 0 0 auto; font-size: 12px; }
+  .contents .nav-rule { display: none; }
+  section { padding-block: 38px 44px; }
+  h2 { font-size: 24px; }
+  .section-head { align-items: flex-start; margin-bottom: 18px; gap: 12px; }
+  .scroll-hint { display: block; font-size: 12px; color: var(--soft); margin-bottom: 8px; }
+  .map-scroll { margin-right: -20px; padding-right: 20px; }
+  figcaption { gap: 10px 20px; }
+  .map-note { margin-left: 0; flex-basis: 100%; }
+  .mismatch { padding: 24px; margin-bottom: 40px; }
+  .mismatch h2 { font-size: 20px; }
+  th,td { padding: 16px 12px; }
+  #persisted-states th { width: 116px; }
+  footer { display: block; padding-block: 24px; }
+  footer > a { display: inline-block; margin-top: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,*::before,*::after { scroll-behavior: auto !important; transition: none !important; }
+}
+@media print {
+  :root { color-scheme: light; --bg: #fff; --surface: #f3f5f6; --raised: #e8eef0; --ink: #17242a; --muted: #394e58; --soft: #425861; --rule: #c5ced2; --line-strong: #667d87; --accent: #075b70; --accent-tint: #eaf5f8; --error: #9b3030; --warning: #745100; }
+  @page { margin: 14mm; }
+  body { font-size: 10pt; }
+  .frame { width: 100%; }
+  .contents,.top-links,.skip,.section-link,.diagram-source,.scroll-hint { display: none; }
+  .document { display: block; }
+  .topbar { padding-block: 0 14px; }
+  .hero { display: block; padding-block: 24px; }
+  .hero h1 { font-size: 36pt; margin-bottom: 12px; }
+  .hero p { font-size: 11pt; }
+  .hero-meta { margin-top: 18px; }
+  .map-scroll,.table-scroll { overflow: visible; }
+  .lifecycle-figure svg { min-width: 0; }
+  .table-scroll table { min-width: 0 !important; font-size: 9pt; }
+  #cli-action-matrix tbody td,#ctrl-g-action-matrix tbody td { font-size: 8pt; }
+  #cli-action-matrix th:first-child,#ctrl-g-action-matrix th:first-child { width: auto; }
+  thead th { white-space: normal; }
+  #cli-action-matrix td code,#ctrl-g-action-matrix td code { white-space: normal; }
+  th,td { padding: 10px 8px; }
+  section { padding-block: 24px; }
+  h2 { font-size: 20pt; }
+  tr, .mismatch, figure { break-inside: avoid; }
+  thead { display: table-header-group; }
+  .mismatch { padding: 20px; }
+  footer { margin-top: 24px; }
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="frame" id="top">
+<div class="topbar"><a class="wordmark" href="#top" aria-label="qqq task lifecycle, top">qqq<span aria-hidden="true" style="color:var(--accent)">.</span></a><div class="top-links"><a href="task-state-transitions.md">Markdown ↗</a><a href="reference.md">CLI reference ↗</a></div></div>
+<div class="hero"><div><h1>Task lifecycle.</h1><p>This describes the persisted <code>tasks.status</code> lifecycle in the current source checkout. The CLI and TUI expose the transitions below; lifecycle changes and their corresponding event records are committed together.</p></div><div class="hero-meta">Source snapshot <code>b9d946f</code></div></div>
+</header>
+<div class="frame document"><nav class="contents" aria-label="On this page"><a href="#normal-lifecycle">Lifecycle</a>
+<a href="#why-reopen-appears-on-a-new-task">New → New</a>
+<a href="#persisted-states">States</a>
+<a href="#cli-action-matrix">CLI rules</a>
+<a href="#ctrl-g-action-matrix">Ctrl-G rules</a>
+<a href="#unusual-and-rejected-transitions">Edge cases</a>
+<a href="#invariants-and-related-fields">Invariants</a></nav><main id="main" tabindex="-1"><article><section id="normal-lifecycle" aria-labelledby="normal-lifecycle-heading"><div class="section-head"><h2 id="normal-lifecycle-heading">Normal lifecycle</h2><a class="section-link" href="#normal-lifecycle" aria-label="Link to Normal lifecycle">#</a></div>
+<figure class="lifecycle-figure">
+<p class="scroll-hint">Scroll diagram →</p>
+<div class="map-scroll" role="region" aria-label="Normal task lifecycle diagram; scroll horizontally on small screens" tabindex="0">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 516" role="img" aria-labelledby="task-lifecycle-title task-lifecycle-desc">
+<title id="task-lifecycle-title">Normal task lifecycle</title>
+<desc id="task-lifecycle-desc">Created tasks enter New, are claimed into In progress, then complete or report an error or blocker; returning, retrying or reopening puts work back into New.</desc>
+<defs>
+<marker id="lifecycle-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0 0 8 3 0 6Z" fill="var(--line-strong)"/></marker>
+<marker id="lifecycle-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0 0 8 3 0 6Z" fill="var(--accent)"/></marker>
+<marker id="lifecycle-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0 0 8 3 0 6Z" fill="var(--ink)"/></marker>
+</defs>
+<g class="connectors" fill="none" stroke="var(--line-strong)" stroke-width="1.5" marker-end="url(#lifecycle-arrow)">
+<path d="M20 192H48"/>
+<path class="primary-path" d="M228 184H400" stroke="var(--accent)" marker-end="url(#lifecycle-arrow-accent)"/>
+<path class="primary-path" d="M600 184H772" stroke="var(--accent)" marker-end="url(#lifecycle-arrow-accent)"/>
+<path class="return-path" d="M444 156V116Q444 108 436 108H140Q132 108 132 116V156"/>
+<path class="return-path" d="M860 156V64Q860 56 852 56H100Q92 56 92 64V156"/>
+<path d="M448 232V284Q448 292 440 292H400Q392 292 392 300V360"/>
+<path d="M552 232V300Q552 308 560 308H632Q640 308 640 316V360"/>
+<path class="return-path" d="M304 400H256Q248 400 248 392V264Q248 256 240 256H164Q156 256 156 248V232"/>
+<path class="return-path" d="M640 436V464Q640 472 632 472H76Q68 472 68 464V232"/>
+</g>
+<g class="edge-labels">
+<rect x="264" y="148" width="100" height="28"/><text x="316" y="168" text-anchor="middle">claim ready</text>
+<rect x="612" y="148" width="148" height="28"/><text x="688" y="168" text-anchor="middle">owner completes</text>
+<rect x="244" y="80" width="108" height="20"/><text x="296" y="96" text-anchor="middle">owner returns</text>
+<rect x="440" y="28" width="80" height="20"/><text x="480" y="44" text-anchor="middle">reopen</text>
+<rect x="264" y="244" width="176" height="36"/><text x="436" y="256" text-anchor="end"><tspan x="436">report error /</tspan><tspan x="436" dy="20">owner proven dead</tspan></text>
+<rect x="648" y="268" width="128" height="20"/><text x="652" y="284">report blocker</text>
+<rect x="72" y="312" width="168" height="40"/><text x="236" y="328" text-anchor="end"><tspan x="236">retry /</tspan><tspan x="236" dy="20">reopen preflight error</tspan></text>
+<rect x="436" y="444" width="64" height="20"/><text x="468" y="460" text-anchor="middle">retry</text>
+</g>
+<circle cx="16" cy="192" r="4" fill="var(--ink)"/>
+<g class="state-node"><rect x="48" y="156" width="180" height="76" rx="8"/><text class="state-name" x="72" y="188">New</text><text class="state-note" x="72" y="212">Waiting in queue</text></g>
+<g class="state-node focal"><rect x="400" y="156" width="200" height="76" rx="8"/><circle cx="424" cy="184" r="4" fill="var(--accent)"/><text class="state-name" x="440" y="188">In progress</text><text class="state-note" x="424" y="212">Claimed by one session</text></g>
+<g class="state-node completed-node"><rect x="772" y="156" width="180" height="76" rx="8"/><text class="state-name" x="796" y="188">Completed</text><text class="state-note" x="796" y="212">Work finished</text></g>
+<g class="state-node"><rect x="304" y="360" width="180" height="76" rx="8"/><text class="state-name" x="328" y="392">Error</text><text class="state-note" x="328" y="416">Failure recorded</text></g>
+<g class="state-node"><rect x="552" y="360" width="180" height="76" rx="8"/><text class="state-name" x="576" y="392">Blocked</text><text class="state-note" x="576" y="416">Needs information</text></g>
+</svg></div>
+<figcaption><span><i class="legend-line"></i>Normal transition</span><span><i class="legend-line dashed"></i>Return to New</span><span class="map-note">Forced actions: see Ctrl-G matrix below.</span></figcaption>
+</figure><details class="diagram-source"><summary>Diagram source</summary><pre><code class="language-mermaid">stateDiagram-v2
+    [*] --&gt; new: create
+    new --&gt; in_progress: claim ready task
+    in_progress --&gt; completed: owner completes
+    in_progress --&gt; new: owner returns task
+    in_progress --&gt; error: owner reports error or preflight proves owner dead
+    in_progress --&gt; blocked: owner reports blocker
+    error --&gt; new: retry
+    error --&gt; new: reopen preflight error
+    blocked --&gt; new: retry
+    completed --&gt; new: reopen</code></pre></details>
+<div class="table-scroll" role="region" aria-label="Normal lifecycle table" tabindex="0"><table><caption class="sr-only">Normal lifecycle</caption><thead><tr><th scope="col">Transition</th><th scope="col">How it happens</th><th scope="col">Guard</th></tr></thead><tbody><tr><th scope="row">Create → <code data-state="new">new</code></th><td><code>qqq add</code>, import, or recipe application</td><td>New tasks start unarchived and unassigned.</td></tr><tr><th scope="row"><code data-state="new">new</code> → <code data-state="in_progress">in_progress</code></th><td><code>next</code> or a worker claims a task</td><td>The task must be unarchived and ready: its parent and every prerequisite are completed.</td></tr><tr><th scope="row"><code data-state="in_progress">in_progress</code> → <code data-state="completed">completed</code></th><td><code>qqq edit ID --complete</code> or TUI Complete</td><td>The CLI requires the current owner. TUI confirmation bypasses ownership checks.</td></tr><tr><th scope="row"><code data-state="in_progress">in_progress</code> → <code data-state="new">new</code></th><td><code>qqq edit ID --set-pending</code> or <code>--set-status new</code></td><td>The current owner must match; this releases the claim.</td></tr><tr><th scope="row"><code data-state="in_progress">in_progress</code> → <code data-state="error">error</code></th><td><code>qqq edit ID --set-status error --reason TEXT</code></td><td>The current owner must match and the reason must be nonblank. Owner preflight can also set <code data-state="error">error</code> when it proves the claim owner is dead.</td></tr><tr><th scope="row"><code data-state="in_progress">in_progress</code> → <code data-state="blocked">blocked</code></th><td><code>qqq edit ID --set-status blocked --reason TEXT</code></td><td>The current owner must match and the reason must be nonblank.</td></tr><tr><th scope="row"><code data-state="error">error</code> or <code data-state="blocked">blocked</code> → <code data-state="new">new</code></th><td><code>qqq edit ID --set-status new</code> or TUI Retry</td><td>No owner is required. The reason and prior history remain.</td></tr><tr><th scope="row"><code data-state="completed">completed</code> → <code data-state="new">new</code></th><td><code>qqq edit ID --reopen</code> or TUI Reopen</td><td>The task must be unarchived. Reopening also checks unfinished archived dependencies.</td></tr><tr><th scope="row"><code data-state="in_progress">in_progress</code> → <code data-state="new">new</code> via Reopen</th><td><code>qqq edit ID --reopen</code></td><td>The CLI requires the saved Herdr owner to be verified absent. TUI confirmation bypasses ownership checks.</td></tr><tr><th scope="row">Preflight <code data-state="error">error</code> → <code data-state="new">new</code></th><td><code>qqq edit ID --reopen</code></td><td>Normal reopen accepts an error only when its latest relevant error event came from owner preflight. Use Retry for manually reported errors.</td></tr></tbody></table></div>
+</section>
+<section id="why-reopen-appears-on-a-new-task" aria-labelledby="why-reopen-appears-on-a-new-task-heading" class="mismatch"><div class="section-head"><h2 id="why-reopen-appears-on-a-new-task-heading">Why Reopen appears on a New task</h2><a class="section-link" href="#why-reopen-appears-on-a-new-task" aria-label="Link to Why Reopen appears on a New task">#</a></div>
+<p>The current Ctrl-G menu hides Reopen for <code data-state="error">error</code> and <code data-state="blocked">blocked</code>, but also shows it for <code data-state="new">new</code>. That visibility rule is broader than the valid transition: a New task cannot reopen. Confirming it with either <code>y</code> or <code>Y</code> opens an action error and leaves the task unchanged. This is a menu availability mismatch.</p>
+<p>Use <code>qqq next</code> to claim a ready New task. Reopen returns previously started or finished work to New; it does not start work or act as a New-to-New no-op.</p>
+</section>
+<section id="persisted-states" aria-labelledby="persisted-states-heading"><div class="section-head"><h2 id="persisted-states-heading">Persisted states</h2><a class="section-link" href="#persisted-states" aria-label="Link to Persisted states">#</a></div>
+<div class="table-scroll" role="region" aria-label="Persisted states table" tabindex="0"><table><caption class="sr-only">Persisted states</caption><thead><tr><th scope="col">Status</th><th scope="col">Meaning</th></tr></thead><tbody><tr><th scope="row"><code data-state="new">new</code></th><td>Waiting in the queue. Claimable when unarchived and all parent and prerequisite tasks are completed.</td></tr><tr><th scope="row"><code data-state="in_progress">in_progress</code></th><td>Claimed by one session. This is the only status with a <code>claim_key</code>.</td></tr><tr><th scope="row"><code data-state="completed">completed</code></th><td>Work is finished. It can be reopened.</td></tr><tr><th scope="row"><code data-state="error">error</code></th><td>Work failed or its owner was proven dead. A reason is stored as a message.</td></tr><tr><th scope="row"><code data-state="blocked">blocked</code></th><td>The owner reported that work cannot proceed. A reason is stored as a message.</td></tr></tbody></table></div>
+<p>Queue diagnostics also use “blocked” for a <code data-state="new">new</code> task that is not ready because of unfinished dependencies. That diagnostic does not change the task&#x27;s persisted status.</p>
+</section>
+<section id="cli-action-matrix" aria-labelledby="cli-action-matrix-heading"><div class="section-head"><h2 id="cli-action-matrix-heading">CLI action matrix</h2><a class="section-link" href="#cli-action-matrix" aria-label="Link to CLI action matrix">#</a></div>
+<p>Each cell gives the resulting status for <code>qqq edit ID</code> with the column&#x27;s option. <code>Reject</code> means the requested transition fails. These rules assume a valid task and any required reason, identity, archive and dependency checks.</p>
+<div class="table-scroll" role="region" aria-label="CLI action matrix table" tabindex="0"><table><caption class="sr-only">CLI action matrix</caption><thead><tr><th scope="col">Current status</th><th scope="col"><code>--complete</code></th><th scope="col"><code>--set-status new</code></th><th scope="col"><code>--set-status error</code></th><th scope="col"><code>--set-status blocked</code></th><th scope="col"><code>--reopen</code></th></tr></thead><tbody><tr><th scope="row"><code data-state="new">new</code></th><td>Reject</td><td>Reject</td><td>Reject</td><td>Reject</td><td>Reject</td></tr><tr><th scope="row"><code data-state="in_progress">in_progress</code></th><td><code data-state="completed">completed</code>, owner</td><td><code data-state="new">new</code>, owner</td><td><code data-state="error">error</code>, owner</td><td><code data-state="blocked">blocked</code>, owner</td><td><code data-state="new">new</code>, absent owner</td></tr><tr><th scope="row"><code data-state="completed">completed</code></th><td>Reject</td><td>Reject</td><td>Reject</td><td>Reject</td><td><code data-state="new">new</code></td></tr><tr><th scope="row"><code data-state="error">error</code></th><td>Reject</td><td><code data-state="new">new</code></td><td>Reject</td><td>Reject</td><td><code data-state="new">new</code> only for a preflight error</td></tr><tr><th scope="row"><code data-state="blocked">blocked</code></th><td>Reject</td><td><code data-state="new">new</code></td><td>Reject</td><td>Reject</td><td>Reject</td></tr></tbody></table></div>
+<p>Error and blocked reports require a nonblank <code>--reason</code>. Normal CLI reopen of an active task must prove the saved Herdr owner absent; failed discovery is not proof. A preflight error is eligible for normal reopen only when its latest event other than archive/unarchive is an error recorded by owner preflight. Manually reported errors use <code>--set-status new</code> to retry.</p>
+<p>The CLI also accepts <code>qqq edit ID --set-status new --force</code> to return an <code data-state="in_progress">in_progress</code>, <code data-state="error">error</code>, or <code data-state="blocked">blocked</code> task to <code data-state="new">new</code> without matching its owner. It still rejects <code data-state="new">new</code> and <code data-state="completed">completed</code>; <code>--force</code> is invalid with other status options. The CLI does not accept <code>--set-status in_progress</code> or <code>--set-status completed</code>: claiming uses <code>next</code>, and completion uses <code>--complete</code>.</p>
+<p><code>next</code> claims only a ready, unarchived New task. When the caller already owns a task, it returns that task without another claim event. It never directly claims an Error, Blocked or Completed task; return or reopen that task to New first.</p>
+</section>
+<section id="ctrl-g-action-matrix" aria-labelledby="ctrl-g-action-matrix-heading"><div class="section-head"><h2 id="ctrl-g-action-matrix-heading">Ctrl-G action matrix</h2><a class="section-link" href="#ctrl-g-action-matrix" aria-label="Link to Ctrl-G action matrix">#</a></div>
+<p>This table describes the menu for the task&#x27;s current status. <code>Hidden</code> means no menu entry. <code>Shown, rejects</code> describes the New/Reopen mismatch above. Both <code>y</code> and <code>Y</code> confirm the same forced action, with no owner or Herdr lookup.</p>
+<div class="table-scroll" role="region" aria-label="Ctrl-G action matrix table" tabindex="0"><table><caption class="sr-only">Ctrl-G action matrix</caption><thead><tr><th scope="col">Current status</th><th scope="col">Complete (<code>c</code>)</th><th scope="col">Mark error (<code>e</code>)</th><th scope="col">Mark blocked (<code>b</code>)</th><th scope="col">Retry (<code>r</code>)</th><th scope="col">Reopen (<code>o</code>)</th></tr></thead><tbody><tr><th scope="row"><code data-state="new">new</code></th><td><code data-state="completed">completed</code></td><td><code data-state="error">error</code></td><td>Hidden</td><td>Hidden</td><td>Shown, rejects</td></tr><tr><th scope="row"><code data-state="in_progress">in_progress</code></th><td><code data-state="completed">completed</code></td><td><code data-state="error">error</code></td><td><code data-state="blocked">blocked</code></td><td>Hidden</td><td><code data-state="new">new</code></td></tr><tr><th scope="row"><code data-state="completed">completed</code></th><td>Hidden</td><td>Hidden</td><td>Hidden</td><td>Hidden</td><td><code data-state="new">new</code></td></tr><tr><th scope="row"><code data-state="error">error</code></th><td><code data-state="completed">completed</code></td><td>Hidden</td><td>Hidden</td><td><code data-state="new">new</code></td><td>Hidden</td></tr><tr><th scope="row"><code data-state="blocked">blocked</code></th><td><code data-state="completed">completed</code></td><td>Hidden</td><td>Hidden</td><td><code data-state="new">new</code></td><td>Hidden</td></tr></tbody></table></div>
+<p>Mark error and Mark blocked require a nonblank reason. Successful transitions clear active ownership while preserving assignment metadata and the saved Herdr link. Clear assignment (<code>u</code>) separately clears the four displayed assignment fields after confirmation; it does not change status, active ownership or the link.</p>
+</section>
+<section id="unusual-and-rejected-transitions" aria-labelledby="unusual-and-rejected-transitions-heading"><div class="section-head"><h2 id="unusual-and-rejected-transitions-heading">Unusual and rejected transitions</h2><a class="section-link" href="#unusual-and-rejected-transitions" aria-label="Link to Unusual and rejected transitions">#</a></div>
+<div class="table-scroll" role="region" aria-label="Unusual and rejected transitions table" tabindex="0"><table><caption class="sr-only">Unusual and rejected transitions</caption><thead><tr><th scope="col">Situation</th><th scope="col">Current behavior</th></tr></thead><tbody><tr><th scope="row">New → Completed or Error</th><td>Ctrl-G permits manual completion/error without first claiming the task. Completion does not require dependencies to be ready. Normal CLI completion/error rejects New.</td></tr><tr><th scope="row">Error or Blocked → Completed</th><td>Ctrl-G Complete permits it; CLI <code>--complete</code> rejects it.</td></tr><tr><th scope="row">New → Blocked</th><td>Rejected by the CLI; Mark blocked is hidden in the TUI. A task must be in progress before it can be marked blocked.</td></tr><tr><th scope="row">New → New through Reopen or return-to-New</th><td>Rejected, including with <code>--force</code>. The visible TUI Reopen entry does not change this.</td></tr><tr><th scope="row">Completed → New through return/retry</th><td>CLI <code>--set-status new</code>, even with <code>--force</code>, rejects it. Use Reopen. TUI Retry is hidden.</td></tr><tr><th scope="row">Repeating completion, error or blocked reporting in the same state</th><td>Rejected. These lifecycle actions are not idempotent no-ops; unavailable TUI entries are hidden.</td></tr><tr><th scope="row">Forcing a live active task to New</th><td>TUI Reopen permits it. CLI normal reopen requires an absent owner; CLI <code>--set-status new --force</code> bypasses ownership.</td></tr><tr><th scope="row">Opening an action, then another worker changes the status</th><td>Confirmation uses the current database status. Force does not guarantee success: Complete rejects an already completed task, and Mark blocked requires it still be in progress.</td></tr><tr><th scope="row">A pending Mark error confirmation after another worker completes the task</th><td>Accepted: the underlying force-error operation also permits Completed → Error, although Mark error is hidden when opening the menu on a completed task.</td></tr><tr><th scope="row">A pending Reopen confirmation after the task becomes Error or Blocked</th><td>Accepted by the underlying force-reopen operation. Newly opened menus offer Retry for these states.</td></tr></tbody></table></div>
+<p>Archived is independent of status. Archived New tasks cannot be claimed. Archive is shown on active tasks but rejects them; an unfinished task with unarchived unfinished dependents also cannot be archived. Reopen rejects archived tasks; unarchive first, or combine CLI <code>--unarchive --reopen</code>. Forced Complete and Mark error do not themselves unarchive a task. A completed or unarchived dependency is available for reopening, but an archived unfinished parent or prerequisite blocks it. Unfinished unarchived dependencies allow reopening to New and then keep that task from being claimed until they finish.</p>
+<p>Rejected mutations leave status, ownership, content and history unchanged. Commands may first run owner preflight; that separate check can record an error for a proven-dead owner before the requested action is evaluated.</p>
+<p>The menu rules live in <a href="../src/tui/mod.rs">src/tui/mod.rs</a> (<code>action_menu_available</code>); transitions and their guards live in <a href="../src/db.rs">src/db.rs</a> (<code>claim</code>, <code>edit_guarded</code>, <code>force_complete</code>, <code>force_error</code>, <code>force_blocked</code>, <code>reopen_task</code>) and <a href="../src/archive.rs">src/archive.rs</a>. CLI option mapping is in <a href="../src/main.rs">src/main.rs</a>.</p>
+</section>
+<section id="invariants-and-related-fields" aria-labelledby="invariants-and-related-fields-heading"><div class="section-head"><h2 id="invariants-and-related-fields-heading">Invariants and related fields</h2><a class="section-link" href="#invariants-and-related-fields" aria-label="Link to Invariants and related fields">#</a></div>
+<ul class="rules"><li><span><code>claim_key</code> is set only while status is <code data-state="in_progress">in_progress</code>; leaving that status clears it. The active claim is unique to one task.</span></li><li><span>Claims, releases, completions, errors, blocked reports, and reopens append an event. Error and blocked reasons are also saved as task messages.</span></li><li><span>Assignment metadata and the saved Herdr link remain after a task leaves <code data-state="in_progress">in_progress</code>; a new claim may replace the link.</span></li><li><span><code>archived</code> is independent of status. It does not create another lifecycle state, but archived tasks cannot be claimed and active tasks cannot be archived.</span></li><li><span>Status transitions can be combined with supported direct edits; the status, event, and accompanying edits commit atomically.</span></li></ul>
+<p>For command syntax and TUI behavior, see the <a href="reference.md">command reference</a>, especially <a href="reference.md#complete-work">completion</a>, <a href="reference.md#reopen-work">reopening</a>, <a href="reference.md#return-or-retry-work">returning or retrying work</a>, and <a href="reference.md#action-confirmations">action confirmations</a>.</p>
+</section></article></main></div>
+<footer class="frame"><p>qqq · Local-first task queue<br>Current behavior, including rejected transitions.</p><a href="#top">Back to top ↑</a></footer>
+</body>
+</html>
