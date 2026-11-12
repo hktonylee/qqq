@@ -31,7 +31,7 @@ command is `qqq`. Package version and DB schema version are separate contracts.
   ./scripts/check-compatibility.sh
   ```
 
-- [ ] Run existing quality/build checks; require CI pass on Ubuntu 24.04 and macOS 14:
+- [ ] Run existing quality/build checks; require CI pass on Ubuntu 24.04 and macOS 15:
 
   ```sh
   cargo fmt --check
