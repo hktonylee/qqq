@@ -35,7 +35,7 @@ use std::{
     io::{IsTerminal, Read},
     path::PathBuf,
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 #[derive(Parser)]
@@ -1020,6 +1020,7 @@ fn execute(
             unreachable!("delete preview handled before database open")
         }
         Commands::Next { wait, dry_run, .. } => {
+            let mut last_herdr_check = Instant::now();
             loop {
                 let task = if dry_run {
                     db.peek_next_filtered(filter)?
@@ -1040,6 +1041,14 @@ fn execute(
                 }
                 // Claim/read transactions end before waiting; no lock spans the sleep.
                 thread::sleep(Duration::from_millis(250));
+                if next_owner
+                    .as_ref()
+                    .is_some_and(|owner| owner.link.is_some())
+                    && last_herdr_check.elapsed() >= Duration::from_secs(1)
+                {
+                    herdr::discover(project_dir)?;
+                    last_herdr_check = Instant::now();
+                }
             }
         }
         Commands::Backup { destination } => snapshot::backup::run(&mut db, &path, &destination)?,

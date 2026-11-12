@@ -388,3 +388,52 @@ fn native_codex_wait_claims_incoming_task_without_herdr() {
     assert_eq!(task["harness_name"], "codex");
     assert_eq!(task["harness_session"], "native-wait");
 }
+
+#[cfg(unix)]
+#[test]
+fn herdr_wait_exits_when_socket_fails_after_startup() {
+    use std::{fs, os::unix::fs::PermissionsExt};
+
+    for caller in [true, false] {
+        let dir = project();
+        let p = dir.path();
+        let pane = serde_json::json!({"pane_id":"w1:p1", "workspace_id":"w1", "tab_id":"w1:t1",
+            "agent":"codex", "terminal_id":"terminal-1", "cwd":p});
+        let response = if caller {
+            serde_json::json!({"result":{"pane":pane}})
+        } else {
+            serde_json::json!({"result":{"agents":[pane]}})
+        };
+        fs::write(p.join("response"), response.to_string()).unwrap();
+        fs::write(p.join("herdr"), "#!/bin/sh\nif [ -e failed ]; then echo 'socket failed' >&2; exit 9; fi\ntouch started\n/bin/cat response\n").unwrap();
+        fs::set_permissions(p.join("herdr"), fs::Permissions::from_mode(0o755)).unwrap();
+        let mut cmd = command(p);
+        cmd.env("PATH", format!("{}:/bin", p.display()))
+            .env_remove("HERDR_SOCKET_PATH")
+            .args(["--json", "next", "--wait"])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        if caller {
+            cmd.env("HERDR_ENV", "1").env("HERDR_PANE_ID", "w1:p1");
+        }
+        let mut waiter = Waiter(Some(cmd.spawn().unwrap()));
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !p.join("started").exists() {
+            assert!(Instant::now() < deadline, "Herdr discovery did not start");
+            thread::sleep(Duration::from_millis(20));
+        }
+        waiter.assert_waiting();
+        fs::write(p.join("failed"), "").unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !waiter.exited() {
+            assert!(Instant::now() < deadline, "waiter ignored Herdr failure");
+            thread::sleep(Duration::from_millis(20));
+        }
+        let output = waiter.0.take().unwrap().wait_with_output().unwrap();
+        assert!(!output.status.success());
+        let error: Value = serde_json::from_slice(&output.stderr).unwrap();
+        assert_eq!(error["code"], "DISPATCH_ERROR");
+        assert_eq!(error["details"]["reason"], "herdr_command_failed");
+        assert_eq!(error["details"]["exit_code"], 9);
+    }
+}
