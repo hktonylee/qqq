@@ -1,6 +1,8 @@
 use anyhow::{Context, Result};
-use serde::{Deserialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{collections::HashMap, fs, io::ErrorKind, path::PathBuf};
+
+pub const DEFAULT_PROMPT: &str = "/goal Use the `qqq next --wait`, to look for next task, and work on that. Repeat this forever. Please don't wake up repeatedly to poll the status when running waiter.";
 
 #[derive(Default, Deserialize)]
 pub struct Config {
@@ -48,7 +50,7 @@ pub struct Tui {
     pub after_save_new: AfterSaveNew,
 }
 
-#[derive(Clone, Copy, Default, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Default, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum AfterSaveNew {
     #[default]

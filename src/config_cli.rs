@@ -10,6 +10,7 @@ use toml_edit::{DocumentMut, Item, Key, Table};
 
 pub fn execute(
     list: bool,
+    all: bool,
     get: Option<&str>,
     unset: Option<&str>,
     key: Option<&str>,
@@ -21,6 +22,15 @@ pub fn execute(
         let values: toml::Value = toml::from_str(&content)
             .with_context(|| format!("Invalid config {}", path.display()))?;
         let mut result = Map::new();
+        if all {
+            result.insert("display.max-completed".into(), Value::Null);
+            result.insert("herdr.initial-env".into(), Value::Null);
+            result.insert("herdr.initial-prompt".into(), json!(config::DEFAULT_PROMPT));
+            result.insert(
+                "tui.after_save_new".into(),
+                json!(config::AfterSaveNew::default()),
+            );
+        }
         flatten(&values, &[], &mut result)?;
         return Ok(Value::Object(result));
     }

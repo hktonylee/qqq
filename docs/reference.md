@@ -877,6 +877,7 @@ Config lives at `~/.config/qqq/config.toml` under `HOME`.
 
 ```sh
 qqq config --list
+qqq config --list --all             # include built-in defaults
 qqq config alias.ls 'list --watch'
 qqq config --get alias.ls             # or: qqq config alias.ls
 qqq config display.max-completed 10
@@ -898,6 +899,8 @@ Keys use TOML dotted syntax; quote literal dots, such as `'alias."with.dot"'`.
 Reads create no files; `--get` can inspect invalid settings. Writes validate known
 settings and preserve comments/unknown keys. Other values parse as TOML literals,
 falling back to strings. JSON returns typed values; unset restores defaults.
+`--list --all` includes built-in defaults and stored values; `null` indicates an
+unset limit or environment setting. `--list` alone shows only stored values.
 Explicit `--max-completed` affects both human and JSON output.
 
 `herdr.initial-prompt` is read each time the creation dialog opens. It supports

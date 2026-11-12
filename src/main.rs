@@ -84,6 +84,9 @@ enum Commands {
         /// List explicitly stored values as dotted keys.
         #[arg(long)]
         list: bool,
+        /// Include built-in defaults in the list.
+        #[arg(long, requires = "list", conflicts_with_all = ["get", "unset", "key"])]
+        all: bool,
         /// Read a dotted key (also supported as a positional key).
         #[arg(long)]
         get: Option<String>,
@@ -435,6 +438,7 @@ fn execute(
     }
     if let Commands::Config {
         list,
+        all,
         get,
         unset,
         key,
@@ -443,6 +447,7 @@ fn execute(
     {
         return config_cli::execute(
             *list,
+            *all,
             get.as_deref(),
             unset.as_deref(),
             key.as_deref(),
