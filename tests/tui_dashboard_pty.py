@@ -4169,11 +4169,14 @@ print(json.dumps({"result": result}))
                 assert detail["events"][-1]["session"] == "worker"
                 for field in ("harness_name", "harness_session", "orchestrator_name", "orchestrator_session"):
                     assert detail["task"][field] == initial_detail["task"][field]
-                open_reopen()
-                send(b"\x03")
+                send(b"\x07")
+                wait_visible(lambda: "Task actions #1" in visible.text())
+                assert "o Reopen" not in visible.text()
+                send(b"o")
                 settle()
-                assert "Reopen task #1?" in visible.text() and not visible.cursor_visible
-                send(b"n")
+                assert "Task actions #1" in visible.text()
+                assert "Reopen task #1?" not in visible.text()
+                send(b"\x1b")
                 wait_frame(lambda: "Task #1 (New)" in editor_title())
                 for task_id, status, shortcut, action, result, event in [
                     (2, "Error", b"r", "Retry", "Retried", "release"),
