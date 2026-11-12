@@ -112,6 +112,52 @@ fn config_list_get_set_unset_work_without_project_database() {
 }
 
 #[test]
+fn config_list_all_includes_defaults_and_stored_values_without_writes() {
+    let p = UserConfig::new();
+    let defaults = p.ok(&["config", "--list", "--all"]);
+    assert_eq!(defaults["tui.after_save_new"], "open_saved");
+    assert_eq!(defaults["display.max-completed"], Value::Null);
+    assert_eq!(defaults["herdr.initial-env"], Value::Null);
+    assert!(
+        defaults["herdr.initial-prompt"]
+            .as_str()
+            .unwrap()
+            .contains("qqq next --wait")
+    );
+    assert_eq!(defaults.as_object().unwrap().len(), 4);
+    assert!(!p.path().exists());
+    p.ok(&["config", "tui.after_save_new", "open_new"]);
+    p.ok(&["config", "display.max-completed", "10"]);
+    p.ok(&["config", "herdr.initial-env", "FOO=bar"]);
+    p.ok(&["config", "herdr.initial-prompt", "custom"]);
+    p.ok(&["config", "alias.ls", "list"]);
+    let all = p.ok(&["config", "--list", "--all"]);
+    assert_eq!(all["tui.after_save_new"], "open_new");
+    assert_eq!(all["display.max-completed"], 10);
+    assert_eq!(all["herdr.initial-env"], "FOO=bar");
+    assert_eq!(all["herdr.initial-prompt"], "custom");
+    assert_eq!(all["alias.ls"], "list");
+    p.ok(&["config", "--unset", "herdr.initial-prompt"]);
+    assert_eq!(
+        p.ok(&["config", "--list", "--all"])["herdr.initial-prompt"],
+        defaults["herdr.initial-prompt"]
+    );
+    assert!(!p.run(&["config", "--all"]).status.success());
+    assert!(
+        !p.run(&["config", "--get", "alias.ls", "--all"])
+            .status
+            .success()
+    );
+    let human = p.run(&["config", "--list", "--all"]);
+    assert!(human.status.success());
+    assert!(
+        String::from_utf8(human.stdout)
+            .unwrap()
+            .contains("tui.after_save_new=open_new")
+    );
+}
+
+#[test]
 fn config_preserves_comments_unknown_values_and_alias_strings() {
     let p = UserConfig::new();
     p.write("# Keep heading\n[alias] # Keep table comment\nls = 'list' # Keep inline comment\n[other]\nnumber = 7\nnames = ['a', 'b']\n# Keep tail\n");
