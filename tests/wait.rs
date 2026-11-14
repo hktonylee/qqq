@@ -405,7 +405,7 @@ fn herdr_wait_exits_when_socket_fails_after_startup() {
             serde_json::json!({"result":{"agents":[pane]}})
         };
         fs::write(p.join("response"), response.to_string()).unwrap();
-        fs::write(p.join("herdr"), "#!/bin/sh\nif [ -e failed ]; then echo 'socket failed' >&2; exit 9; fi\ntouch started\n/bin/cat response\n").unwrap();
+        fs::write(p.join("herdr"), "#!/bin/sh\nif [ -e failed ]; then echo 'socket failed' >&2; exit 9; fi\n: > started\n/bin/cat response\n").unwrap();
         fs::set_permissions(p.join("herdr"), fs::Permissions::from_mode(0o755)).unwrap();
         let mut cmd = command(p);
         cmd.env("PATH", format!("{}:/bin", p.display()))
